@@ -1,12 +1,14 @@
 
-export const DIRECTION_LEFT = 'left'
-export const DIRECTION_RIGHT = 'right'
-export const DIRECTION_UP = 'up'
-export const DIRECTION_DOWN = 'down'
+export const DIRECTION_LEFT = 'ArrowLeft'
+export const DIRECTION_RIGHT = 'ArrowRight'
+export const DIRECTION_UP = 'ArrowUp'
+export const DIRECTION_DOWN = 'ArrowDown'
 
 export const SIZE_CELL = 10
 export const NUM_ROWS = 30
 export const NUM_COLS = 80
+
+export const GAME_SPEED = 500
 
 export const STYLE_PANEL = {width: (SIZE_CELL * NUM_COLS), height: (SIZE_CELL * NUM_ROWS), display: 'table'}
 export const STYLE_ROW = {display: 'table-row'}
