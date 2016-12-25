@@ -26,6 +26,7 @@ class App extends React.Component {
             direction: CONST.DIRECTION_RIGHT,
             isPlaying: false,
             extensionCounter: 0,
+            score: 0,
             snake,
             scene
         }
@@ -76,7 +77,10 @@ class App extends React.Component {
 
         if (2 == scene[newHead.y][newHead.x]) { // got apple
             this.setApple(scene)
-            this.setState({extensionCounter: this.state.extensionCounter + 2})
+            this.setState({
+                extensionCounter: this.state.extensionCounter + 2,
+                score: this.state.score + 1
+            })
         }
         else {
             if (0 < this.state.extensionCounter) {
@@ -92,7 +96,7 @@ class App extends React.Component {
         this.setState({scene, snake})
     }
     startGameHandler() {
-        Rx.Observable.fromEvent(document, 'keyup')
+        Rx.Observable.fromEvent(document, 'keydown')
             .takeWhile(x => this.state.isPlaying)
             .filter(e => 36 < e.keyCode && e.keyCode < 41) // arrow keys only
             .subscribe(e => this.setState({direction: e.key}))
@@ -109,13 +113,22 @@ class App extends React.Component {
     render() {
         const cellStyle = n => 1 === n ? CONST.STYLE_SNAKE : (2 === n ? CONST.STYLE_APPLE : CONST.STYLE_CELL)
         return  <div>
-                    <div>
-                    {
-                        this.state.isPlaying
-                        ? <button onClick={this.stopGameHandler}>Pause Game</button>
-                        : <button onClick={this.startGameHandler}>Start Game</button>
-                    }
-                    {this.state.direction}
+                    <div style={{display: 'table'}}>
+                        <div style={{display: 'table-row'}}>
+                            <div style={{display: 'table-cell'}}>
+                            {
+                                this.state.isPlaying
+                                ? <button onClick={this.stopGameHandler}>Pause Game</button>
+                                : <button onClick={this.startGameHandler}>Start Game</button>
+                            }
+                            </div>
+                            <div style={{display:'table-cell', paddingLeft: '50px'}}>
+                                Direction: {this.state.direction}
+                            </div>
+                            <div style={{display: 'table-cell', paddingLeft: '50px'}}>
+                                Score: {this.state.score}
+                            </div>
+                        </div>
                     </div>
                     <div style={CONST.STYLE_PANEL}>
                     {

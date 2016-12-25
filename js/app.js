@@ -21549,6 +21549,7 @@
 	                direction: CONST.DIRECTION_RIGHT,
 	                isPlaying: false,
 	                extensionCounter: 0,
+	                score: 0,
 	                snake: snake,
 	                scene: scene
 	            };
@@ -21608,7 +21609,10 @@
 	            if (2 == scene[newHead.y][newHead.x]) {
 	                // got apple
 	                this.setApple(scene);
-	                this.setState({ extensionCounter: this.state.extensionCounter + 2 });
+	                this.setState({
+	                    extensionCounter: this.state.extensionCounter + 2,
+	                    score: this.state.score + 1
+	                });
 	            } else {
 	                if (0 < this.state.extensionCounter) {
 	                    this.setState({ extensionCounter: this.state.extensionCounter - 1 });
@@ -21626,7 +21630,7 @@
 	        value: function startGameHandler() {
 	            var _this2 = this;
 
-	            _rxjs2.default.Observable.fromEvent(document, 'keyup').takeWhile(function (x) {
+	            _rxjs2.default.Observable.fromEvent(document, 'keydown').takeWhile(function (x) {
 	                return _this2.state.isPlaying;
 	            }).filter(function (e) {
 	                return 36 < e.keyCode && e.keyCode < 41;
@@ -21657,17 +21661,36 @@
 	                null,
 	                _react2.default.createElement(
 	                    'div',
-	                    null,
-	                    this.state.isPlaying ? _react2.default.createElement(
-	                        'button',
-	                        { onClick: this.stopGameHandler },
-	                        'Pause Game'
-	                    ) : _react2.default.createElement(
-	                        'button',
-	                        { onClick: this.startGameHandler },
-	                        'Start Game'
-	                    ),
-	                    this.state.direction
+	                    { style: { display: 'table' } },
+	                    _react2.default.createElement(
+	                        'div',
+	                        { style: { display: 'table-row' } },
+	                        _react2.default.createElement(
+	                            'div',
+	                            { style: { display: 'table-cell' } },
+	                            this.state.isPlaying ? _react2.default.createElement(
+	                                'button',
+	                                { onClick: this.stopGameHandler },
+	                                'Pause Game'
+	                            ) : _react2.default.createElement(
+	                                'button',
+	                                { onClick: this.startGameHandler },
+	                                'Start Game'
+	                            )
+	                        ),
+	                        _react2.default.createElement(
+	                            'div',
+	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
+	                            'Direction: ',
+	                            this.state.direction
+	                        ),
+	                        _react2.default.createElement(
+	                            'div',
+	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
+	                            'Score: ',
+	                            this.state.score
+	                        )
+	                    )
 	                ),
 	                _react2.default.createElement(
 	                    'div',
@@ -40116,7 +40139,7 @@
 	var NUM_ROWS = exports.NUM_ROWS = 30;
 	var NUM_COLS = exports.NUM_COLS = 80;
 
-	var GAME_SPEED = exports.GAME_SPEED = 500;
+	var GAME_SPEED = exports.GAME_SPEED = 300;
 
 	var STYLE_PANEL = exports.STYLE_PANEL = { width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, display: 'table' };
 	var STYLE_ROW = exports.STYLE_ROW = { display: 'table-row' };
