@@ -6,6 +6,7 @@ class App extends React.Component {
     constructor(props) {
         super(props)
 
+        this.setApple = this.setApple.bind(this)
         this.getInitState = this.getInitState.bind(this)      
         this.update = this.update.bind(this)
         this.startGameHandler = this.startGameHandler.bind(this)
@@ -19,11 +20,22 @@ class App extends React.Component {
         let snake = [{x:0, y:0}, {x:1, y:0}, {x:2, y:0}]
         snake.forEach(({x,y}) => scene[y][x] = 1)
 
+        this.setApple(scene)
+
         return {
             direction: CONST.DIRECTION_RIGHT,
             isPlaying: false,
             snake,
             scene
+        }
+    }
+    setApple(scene) {
+        while(true) {
+            const pos = {x: Math.round(Math.random() * (CONST.NUM_COLS - 1)), y: Math.round(Math.random() * (CONST.NUM_ROWS - 1))}
+            if (0 == scene[pos.y][pos.x]) {
+                scene[pos.y][pos.x] = 2
+                return
+            }
         }
     }
     calcNewHead(currentHead) {
@@ -60,8 +72,12 @@ class App extends React.Component {
         }
 
         snake.push(newHead)
-
         snake = snake.slice(1)
+
+        if (2 == scene[newHead.y][newHead.x]) { // got apple
+            this.setApple(scene)
+        }
+        
         scene[newHead.y][newHead.x] = 1
 
         this.setState({scene, snake})
@@ -82,6 +98,7 @@ class App extends React.Component {
         this.setState({isPlaying: false})
     }
     render() {
+        const cellStyle = n => 1 === n ? CONST.STYLE_SNAKE : (2 === n ? CONST.STYLE_APPLE : CONST.STYLE_CELL)
         return  <div>
                     <div>
                     {
@@ -97,7 +114,7 @@ class App extends React.Component {
                             return  <div key={index} style={CONST.STYLE_ROW}>
                                     {
                                         row.map(function(col, index2) {
-                                            return  <div key={index2} style={1 === col ? CONST.STYLE_SNAKE : CONST.STYLE_CELL}>
+                                            return  <div key={index2} style={cellStyle(col)}>
                                                     {col}
                                                     </div>
                                         })

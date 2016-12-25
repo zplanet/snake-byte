@@ -13,5 +13,6 @@ export const GAME_SPEED = 500
 export const STYLE_PANEL = {width: (SIZE_CELL * NUM_COLS), height: (SIZE_CELL * NUM_ROWS), display: 'table'}
 export const STYLE_ROW = {display: 'table-row'}
 export const STYLE_CELL = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'white', display: 'table-cell'}
-export const STYLE_SNAKE = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'red', display: 'table-cell'}
+export const STYLE_SNAKE = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: '#66ff99', display: 'table-cell'}
+export const STYLE_APPLE = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'red', display: 'table-cell'}
 

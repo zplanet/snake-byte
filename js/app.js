@@ -21515,6 +21515,7 @@
 
 	        var _this = _possibleConstructorReturn(this, (App.__proto__ || Object.getPrototypeOf(App)).call(this, props));
 
+	        _this.setApple = _this.setApple.bind(_this);
 	        _this.getInitState = _this.getInitState.bind(_this);
 	        _this.update = _this.update.bind(_this);
 	        _this.startGameHandler = _this.startGameHandler.bind(_this);
@@ -21542,12 +21543,25 @@
 	                return scene[y][x] = 1;
 	            });
 
+	            this.setApple(scene);
+
 	            return {
 	                direction: CONST.DIRECTION_RIGHT,
 	                isPlaying: false,
 	                snake: snake,
 	                scene: scene
 	            };
+	        }
+	    }, {
+	        key: 'setApple',
+	        value: function setApple(scene) {
+	            while (true) {
+	                var pos = { x: Math.round(Math.random() * (CONST.NUM_COLS - 1)), y: Math.round(Math.random() * (CONST.NUM_ROWS - 1)) };
+	                if (0 == scene[pos.y][pos.x]) {
+	                    scene[pos.y][pos.x] = 2;
+	                    return;
+	                }
+	            }
 	        }
 	    }, {
 	        key: 'calcNewHead',
@@ -21589,8 +21603,13 @@
 	            }
 
 	            snake.push(newHead);
-
 	            snake = snake.slice(1);
+
+	            if (2 == scene[newHead.y][newHead.x]) {
+	                // got apple
+	                this.setApple(scene);
+	            }
+
 	            scene[newHead.y][newHead.x] = 1;
 
 	            this.setState({ scene: scene, snake: snake });
@@ -21623,6 +21642,9 @@
 	    }, {
 	        key: 'render',
 	        value: function render() {
+	            var cellStyle = function cellStyle(n) {
+	                return 1 === n ? CONST.STYLE_SNAKE : 2 === n ? CONST.STYLE_APPLE : CONST.STYLE_CELL;
+	            };
 	            return _react2.default.createElement(
 	                'div',
 	                null,
@@ -21650,7 +21672,7 @@
 	                            row.map(function (col, index2) {
 	                                return _react2.default.createElement(
 	                                    'div',
-	                                    { key: index2, style: 1 === col ? CONST.STYLE_SNAKE : CONST.STYLE_CELL },
+	                                    { key: index2, style: cellStyle(col) },
 	                                    col
 	                                );
 	                            })
@@ -40092,7 +40114,8 @@
 	var STYLE_PANEL = exports.STYLE_PANEL = { width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, display: 'table' };
 	var STYLE_ROW = exports.STYLE_ROW = { display: 'table-row' };
 	var STYLE_CELL = exports.STYLE_CELL = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'white', display: 'table-cell' };
-	var STYLE_SNAKE = exports.STYLE_SNAKE = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'red', display: 'table-cell' };
+	var STYLE_SNAKE = exports.STYLE_SNAKE = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: '#66ff99', display: 'table-cell' };
+	var STYLE_APPLE = exports.STYLE_APPLE = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'red', display: 'table-cell' };
 
 /***/ }
 /******/ ]);
