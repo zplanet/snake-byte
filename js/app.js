@@ -21548,6 +21548,7 @@
 	            return {
 	                direction: CONST.DIRECTION_RIGHT,
 	                isPlaying: false,
+	                extensionCounter: 0,
 	                snake: snake,
 	                scene: scene
 	            };
@@ -21603,11 +21604,17 @@
 	            }
 
 	            snake.push(newHead);
-	            snake = snake.slice(1);
 
 	            if (2 == scene[newHead.y][newHead.x]) {
 	                // got apple
 	                this.setApple(scene);
+	                this.setState({ extensionCounter: this.state.extensionCounter + 2 });
+	            } else {
+	                if (0 < this.state.extensionCounter) {
+	                    this.setState({ extensionCounter: this.state.extensionCounter - 1 });
+	                } else {
+	                    snake = snake.slice(1);
+	                }
 	            }
 
 	            scene[newHead.y][newHead.x] = 1;
