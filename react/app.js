@@ -27,6 +27,9 @@ class App extends React.Component {
             isPlaying: false,
             extensionCounter: 0,
             score: 0,
+            speed: 500,
+            keyEvent$: null,
+            timer$: null,
             snake,
             scene
         }
@@ -96,18 +99,26 @@ class App extends React.Component {
         this.setState({scene, snake})
     }
     startGameHandler() {
-        Rx.Observable.fromEvent(document, 'keydown')
-            .takeWhile(x => this.state.isPlaying)
-            .filter(e => 36 < e.keyCode && e.keyCode < 41) // arrow keys only
-            .subscribe(e => this.setState({direction: e.key}))
+        const ke$ = Rx.Observable.fromEvent(document, 'keydown')
+                        .takeWhile(x => this.state.isPlaying)
+                        .filter(e => 36 < e.keyCode && e.keyCode < 41) // arrow keys only
+                        .subscribe(e => this.setState({direction: e.key}))
         
-        Rx.Observable.timer(1000, CONST.GAME_SPEED)
-            .takeWhile(x => this.state.isPlaying)
-            .subscribe(this.update)
+        const tm$ = Rx.Observable.timer(1000, this.state.speed)
+                        .takeWhile(x => this.state.isPlaying)
+                        .subscribe(this.update)
 
-        this.setState({isPlaying: true})
+        this.setState({isPlaying: true, keyEvent$: ke$, timer$: tm$})
     }
     stopGameHandler() {
+        if (null != this.state.keyEvent$) {
+            this.state.keyEvent$.unsubscribe()
+        }
+        
+        if (null != this.state.timer$) {
+            this.state.timer$.unsubscribe()
+        }
+
         this.setState({isPlaying: false})
     }
     render() {
@@ -127,6 +138,19 @@ class App extends React.Component {
                             </div>
                             <div style={{display: 'table-cell', paddingLeft: '50px'}}>
                                 Score: {this.state.score}
+                            </div>
+                            <div style={{display: 'table-cell', paddingLeft: '50px'}}>
+                                Speed:
+                            {
+                                this.state.isPlaying
+                                ? this.state.speed
+                                :   
+                                    <select onChange={(e) => this.setState({speed: e.target.value})} value={this.state.speed}>
+                                        <option value="100">fast</option>
+                                        <option value="300">medium</option>
+                                        <option value="500">slow</option>
+                                    </select>
+                            }
                             </div>
                         </div>
                     </div>

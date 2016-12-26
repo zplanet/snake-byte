@@ -21550,6 +21550,9 @@
 	                isPlaying: false,
 	                extensionCounter: 0,
 	                score: 0,
+	                speed: 500,
+	                keyEvent$: null,
+	                timer$: null,
 	                snake: snake,
 	                scene: scene
 	            };
@@ -21630,7 +21633,7 @@
 	        value: function startGameHandler() {
 	            var _this2 = this;
 
-	            _rxjs2.default.Observable.fromEvent(document, 'keydown').takeWhile(function (x) {
+	            var ke$ = _rxjs2.default.Observable.fromEvent(document, 'keydown').takeWhile(function (x) {
 	                return _this2.state.isPlaying;
 	            }).filter(function (e) {
 	                return 36 < e.keyCode && e.keyCode < 41;
@@ -21639,20 +21642,30 @@
 	                return _this2.setState({ direction: e.key });
 	            });
 
-	            _rxjs2.default.Observable.timer(1000, CONST.GAME_SPEED).takeWhile(function (x) {
+	            var tm$ = _rxjs2.default.Observable.timer(1000, this.state.speed).takeWhile(function (x) {
 	                return _this2.state.isPlaying;
 	            }).subscribe(this.update);
 
-	            this.setState({ isPlaying: true });
+	            this.setState({ isPlaying: true, keyEvent$: ke$, timer$: tm$ });
 	        }
 	    }, {
 	        key: 'stopGameHandler',
 	        value: function stopGameHandler() {
+	            if (null != this.state.keyEvent$) {
+	                this.state.keyEvent$.unsubscribe();
+	            }
+
+	            if (null != this.state.timer$) {
+	                this.state.timer$.unsubscribe();
+	            }
+
 	            this.setState({ isPlaying: false });
 	        }
 	    }, {
 	        key: 'render',
 	        value: function render() {
+	            var _this3 = this;
+
 	            var cellStyle = function cellStyle(n) {
 	                return 1 === n ? CONST.STYLE_SNAKE : 2 === n ? CONST.STYLE_APPLE : CONST.STYLE_CELL;
 	            };
@@ -21689,6 +21702,32 @@
 	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
 	                            'Score: ',
 	                            this.state.score
+	                        ),
+	                        _react2.default.createElement(
+	                            'div',
+	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
+	                            'Speed:',
+	                            this.state.isPlaying ? this.state.speed : _react2.default.createElement(
+	                                'select',
+	                                { onChange: function onChange(e) {
+	                                        return _this3.setState({ speed: e.target.value });
+	                                    }, value: this.state.speed },
+	                                _react2.default.createElement(
+	                                    'option',
+	                                    { value: '100' },
+	                                    'fast'
+	                                ),
+	                                _react2.default.createElement(
+	                                    'option',
+	                                    { value: '300' },
+	                                    'medium'
+	                                ),
+	                                _react2.default.createElement(
+	                                    'option',
+	                                    { value: '500' },
+	                                    'slow'
+	                                )
+	                            )
 	                        )
 	                    )
 	                ),
@@ -40138,8 +40177,6 @@
 	var SIZE_CELL = exports.SIZE_CELL = 10;
 	var NUM_ROWS = exports.NUM_ROWS = 30;
 	var NUM_COLS = exports.NUM_COLS = 80;
-
-	var GAME_SPEED = exports.GAME_SPEED = 300;
 
 	var STYLE_PANEL = exports.STYLE_PANEL = { width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, display: 'table' };
 	var STYLE_ROW = exports.STYLE_ROW = { display: 'table-row' };
