@@ -21550,7 +21550,7 @@
 	                isPlaying: false,
 	                extensionCounter: 0,
 	                score: 0,
-	                speed: 500,
+	                speed: CONST.SPEED_SLOW,
 	                keyEvent$: null,
 	                timer$: null,
 	                snake: snake,
@@ -21639,7 +21639,7 @@
 	                return 36 < e.keyCode && e.keyCode < 41;
 	            }) // arrow keys only
 	            .subscribe(function (e) {
-	                return _this2.setState({ direction: e.key });
+	                return _this2.setState({ direction: e.keyCode });
 	            });
 
 	            var tm$ = _rxjs2.default.Observable.timer(1000, this.state.speed).takeWhile(function (x) {
@@ -21695,7 +21695,7 @@
 	                            'div',
 	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
 	                            'Direction: ',
-	                            this.state.direction
+	                            CONST.DIRECTION_NAMES[this.state.direction]
 	                        ),
 	                        _react2.default.createElement(
 	                            'div',
@@ -21714,17 +21714,17 @@
 	                                    }, value: this.state.speed },
 	                                _react2.default.createElement(
 	                                    'option',
-	                                    { value: '100' },
+	                                    { value: CONST.SPEED_FAST },
 	                                    'fast'
 	                                ),
 	                                _react2.default.createElement(
 	                                    'option',
-	                                    { value: '300' },
+	                                    { value: CONST.SPEED_MEDIUM },
 	                                    'medium'
 	                                ),
 	                                _react2.default.createElement(
 	                                    'option',
-	                                    { value: '500' },
+	                                    { value: CONST.SPEED_SLOW },
 	                                    'slow'
 	                                )
 	                            )
@@ -40164,15 +40164,26 @@
 /* 521 */
 /***/ function(module, exports) {
 
-	'use strict';
+	"use strict";
 
 	Object.defineProperty(exports, "__esModule", {
-	  value: true
+	    value: true
 	});
-	var DIRECTION_LEFT = exports.DIRECTION_LEFT = 'ArrowLeft';
-	var DIRECTION_RIGHT = exports.DIRECTION_RIGHT = 'ArrowRight';
-	var DIRECTION_UP = exports.DIRECTION_UP = 'ArrowUp';
-	var DIRECTION_DOWN = exports.DIRECTION_DOWN = 'ArrowDown';
+	var DIRECTION_LEFT = exports.DIRECTION_LEFT = 37;
+	var DIRECTION_UP = exports.DIRECTION_UP = 38;
+	var DIRECTION_RIGHT = exports.DIRECTION_RIGHT = 39;
+	var DIRECTION_DOWN = exports.DIRECTION_DOWN = 40;
+
+	var DIRECTION_NAMES = exports.DIRECTION_NAMES = {
+	    DIRECTION_LEFT: "LEFT",
+	    DIRECTION_UP: "UP",
+	    DIRECTION_RIGHT: "RIGHT",
+	    DIRECTION_DOWN: "DOWN"
+	};
+
+	var SPEED_FAST = exports.SPEED_FAST = 100;
+	var SPEED_MEDIUM = exports.SPEED_MEDIUM = 300;
+	var SPEED_SLOW = exports.SPEED_SLOW = 500;
 
 	var SIZE_CELL = exports.SIZE_CELL = 10;
 	var NUM_ROWS = exports.NUM_ROWS = 30;

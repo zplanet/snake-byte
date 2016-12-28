@@ -1,8 +1,19 @@
 
-export const DIRECTION_LEFT = 'ArrowLeft'
-export const DIRECTION_RIGHT = 'ArrowRight'
-export const DIRECTION_UP = 'ArrowUp'
-export const DIRECTION_DOWN = 'ArrowDown'
+export const DIRECTION_LEFT = 37
+export const DIRECTION_UP = 38
+export const DIRECTION_RIGHT = 39
+export const DIRECTION_DOWN = 40
+
+export const DIRECTION_NAMES = {
+    DIRECTION_LEFT: "LEFT",
+    DIRECTION_UP: "UP",
+    DIRECTION_RIGHT: "RIGHT",
+    DIRECTION_DOWN: "DOWN"
+}
+
+export const SPEED_FAST = 100
+export const SPEED_MEDIUM = 300
+export const SPEED_SLOW = 500
 
 export const SIZE_CELL = 10
 export const NUM_ROWS = 30

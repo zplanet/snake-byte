@@ -27,7 +27,7 @@ class App extends React.Component {
             isPlaying: false,
             extensionCounter: 0,
             score: 0,
-            speed: 500,
+            speed: CONST.SPEED_SLOW,
             keyEvent$: null,
             timer$: null,
             snake,
@@ -102,7 +102,7 @@ class App extends React.Component {
         const ke$ = Rx.Observable.fromEvent(document, 'keydown')
                         .takeWhile(x => this.state.isPlaying)
                         .filter(e => 36 < e.keyCode && e.keyCode < 41) // arrow keys only
-                        .subscribe(e => this.setState({direction: e.key}))
+                        .subscribe(e => this.setState({direction: e.keyCode}))
         
         const tm$ = Rx.Observable.timer(1000, this.state.speed)
                         .takeWhile(x => this.state.isPlaying)
@@ -134,7 +134,7 @@ class App extends React.Component {
                             }
                             </div>
                             <div style={{display:'table-cell', paddingLeft: '50px'}}>
-                                Direction: {this.state.direction}
+                                Direction: {CONST.DIRECTION_NAMES[this.state.direction]}
                             </div>
                             <div style={{display: 'table-cell', paddingLeft: '50px'}}>
                                 Score: {this.state.score}
@@ -146,9 +146,9 @@ class App extends React.Component {
                                 ? this.state.speed
                                 :   
                                     <select onChange={(e) => this.setState({speed: e.target.value})} value={this.state.speed}>
-                                        <option value="100">fast</option>
-                                        <option value="300">medium</option>
-                                        <option value="500">slow</option>
+                                        <option value={CONST.SPEED_FAST}>fast</option>
+                                        <option value={CONST.SPEED_MEDIUM}>medium</option>
+                                        <option value={CONST.SPEED_SLOW}>slow</option>
                                     </select>
                             }
                             </div>
