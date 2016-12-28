@@ -102,6 +102,7 @@ class App extends React.Component {
         const ke$ = Rx.Observable.fromEvent(document, 'keydown')
                         .takeWhile(x => this.state.isPlaying)
                         .filter(e => 36 < e.keyCode && e.keyCode < 41) // arrow keys only
+                        .filter(e => CONST.DIRECTION_OPPS[this.state.direction] != e.keyCode)
                         .subscribe(e => this.setState({direction: e.keyCode}))
         
         const tm$ = Rx.Observable.timer(1000, this.state.speed)

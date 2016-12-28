@@ -21638,7 +21638,9 @@
 	            }).filter(function (e) {
 	                return 36 < e.keyCode && e.keyCode < 41;
 	            }) // arrow keys only
-	            .subscribe(function (e) {
+	            .filter(function (e) {
+	                return CONST.DIRECTION_OPPS[_this2.state.direction] != e.keyCode;
+	            }).subscribe(function (e) {
 	                return _this2.setState({ direction: e.keyCode });
 	            });
 
@@ -40175,10 +40177,17 @@
 	var DIRECTION_DOWN = exports.DIRECTION_DOWN = 40;
 
 	var DIRECTION_NAMES = exports.DIRECTION_NAMES = {
-	    DIRECTION_LEFT: "LEFT",
-	    DIRECTION_UP: "UP",
-	    DIRECTION_RIGHT: "RIGHT",
-	    DIRECTION_DOWN: "DOWN"
+	    37: "LEFT",
+	    38: "UP",
+	    39: "RIGHT",
+	    40: "DOWN"
+	};
+
+	var DIRECTION_OPPS = exports.DIRECTION_OPPS = {
+	    37: DIRECTION_RIGHT,
+	    38: DIRECTION_DOWN,
+	    39: DIRECTION_LEFT,
+	    40: DIRECTION_UP
 	};
 
 	var SPEED_FAST = exports.SPEED_FAST = 100;

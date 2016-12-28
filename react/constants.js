@@ -5,10 +5,17 @@ export const DIRECTION_RIGHT = 39
 export const DIRECTION_DOWN = 40
 
 export const DIRECTION_NAMES = {
-    DIRECTION_LEFT: "LEFT",
-    DIRECTION_UP: "UP",
-    DIRECTION_RIGHT: "RIGHT",
-    DIRECTION_DOWN: "DOWN"
+    37: "LEFT",
+    38: "UP",
+    39: "RIGHT",
+    40: "DOWN"
+}
+
+export const DIRECTION_OPPS = {
+    37: DIRECTION_RIGHT,
+    38: DIRECTION_DOWN,
+    39: DIRECTION_LEFT,
+    40: DIRECTION_UP
 }
 
 export const SPEED_FAST = 100
