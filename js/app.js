@@ -21741,11 +21741,7 @@
 	                            'div',
 	                            { key: index, style: CONST.STYLE_ROW },
 	                            row.map(function (col, index2) {
-	                                return _react2.default.createElement(
-	                                    'div',
-	                                    { key: index2, style: cellStyle(col) },
-	                                    col
-	                                );
+	                                return _react2.default.createElement('div', { key: index2, style: cellStyle(col) });
 	                            })
 	                        );
 	                    }.bind(this))
@@ -40198,7 +40194,7 @@
 	var NUM_ROWS = exports.NUM_ROWS = 30;
 	var NUM_COLS = exports.NUM_COLS = 80;
 
-	var STYLE_PANEL = exports.STYLE_PANEL = { width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, display: 'table' };
+	var STYLE_PANEL = exports.STYLE_PANEL = { width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, display: 'table', borderStyle: 'solid' };
 	var STYLE_ROW = exports.STYLE_ROW = { display: 'table-row' };
 	var STYLE_CELL = exports.STYLE_CELL = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'white', display: 'table-cell' };
 	var STYLE_SNAKE = exports.STYLE_SNAKE = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: '#66ff99', display: 'table-cell' };

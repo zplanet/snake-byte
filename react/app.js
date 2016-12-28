@@ -162,7 +162,6 @@ class App extends React.Component {
                                     {
                                         row.map(function(col, index2) {
                                             return  <div key={index2} style={cellStyle(col)}>
-                                                    {col}
                                                     </div>
                                         })
                                     }
