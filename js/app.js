@@ -21665,20 +21665,20 @@
 	            var _this3 = this;
 
 	            var cellStyle = function cellStyle(n) {
-	                return 1 === n ? CONST.STYLE_SNAKE : 2 === n ? CONST.STYLE_APPLE : CONST.STYLE_CELL;
+	                return 1 === n ? CONST.STYLE_SNAKE : 2 === n ? CONST.STYLE_APPLE : CONST.STYLE_EMPTY;
 	            };
 	            return _react2.default.createElement(
 	                'div',
 	                null,
 	                _react2.default.createElement(
 	                    'div',
-	                    { style: { display: 'table' } },
+	                    { style: CONST.STYLE_TABLE },
 	                    _react2.default.createElement(
 	                        'div',
-	                        { style: { display: 'table-row' } },
+	                        { style: CONST.STYLE_TABLE_ROW },
 	                        _react2.default.createElement(
 	                            'div',
-	                            { style: { display: 'table-cell' } },
+	                            { style: CONST.STYLE_TABLE_CELL },
 	                            this.state.isPlaying ? _react2.default.createElement(
 	                                'button',
 	                                { onClick: this.stopGameHandler },
@@ -21691,19 +21691,19 @@
 	                        ),
 	                        _react2.default.createElement(
 	                            'div',
-	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
+	                            { style: CONST.STYLE_TABLE_CELL_PAD },
 	                            'Direction: ',
 	                            CONST.DIRECTION_NAMES[this.state.direction]
 	                        ),
 	                        _react2.default.createElement(
 	                            'div',
-	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
+	                            { style: CONST.STYLE_TABLE_CELL_PAD },
 	                            'Score: ',
 	                            this.state.score
 	                        ),
 	                        _react2.default.createElement(
 	                            'div',
-	                            { style: { display: 'table-cell', paddingLeft: '50px' } },
+	                            { style: CONST.STYLE_TABLE_CELL_PAD },
 	                            'Speed:',
 	                            this.state.isPlaying ? this.state.speed : _react2.default.createElement(
 	                                'select',
@@ -21731,11 +21731,11 @@
 	                ),
 	                _react2.default.createElement(
 	                    'div',
-	                    { style: CONST.STYLE_PANEL },
+	                    { style: CONST.STYLE_BOARD },
 	                    this.state.scene.map(function (row, index) {
 	                        return _react2.default.createElement(
 	                            'div',
-	                            { key: index, style: CONST.STYLE_ROW },
+	                            { key: index, style: CONST.STYLE_TABLE_ROW },
 	                            row.map(function (col, index2) {
 	                                return _react2.default.createElement('div', { key: index2, style: cellStyle(col) });
 	                            })
@@ -40190,11 +40190,17 @@
 	var NUM_ROWS = exports.NUM_ROWS = 30;
 	var NUM_COLS = exports.NUM_COLS = 80;
 
-	var STYLE_PANEL = exports.STYLE_PANEL = { width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, display: 'table', borderStyle: 'solid' };
-	var STYLE_ROW = exports.STYLE_ROW = { display: 'table-row' };
-	var STYLE_CELL = exports.STYLE_CELL = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'white', display: 'table-cell' };
-	var STYLE_SNAKE = exports.STYLE_SNAKE = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: '#66ff99', display: 'table-cell' };
-	var STYLE_APPLE = exports.STYLE_APPLE = { width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'red', display: 'table-cell' };
+	var STYLE_TABLE = exports.STYLE_TABLE = { display: 'table' };
+	var STYLE_TABLE_ROW = exports.STYLE_TABLE_ROW = { display: 'table-row' };
+	var STYLE_TABLE_CELL = exports.STYLE_TABLE_CELL = { display: 'table-cell' };
+	var STYLE_TABLE_CELL_PAD = exports.STYLE_TABLE_CELL_PAD = Object.assign({}, STYLE_TABLE_CELL, { paddingLeft: '50px' });
+
+	var STYLE_BOARD = exports.STYLE_BOARD = { display: 'table', width: SIZE_CELL * NUM_COLS, height: SIZE_CELL * NUM_ROWS, borderStyle: 'solid' };
+
+	var STYLE_CELL = { display: 'table-cell', width: SIZE_CELL, height: SIZE_CELL };
+	var STYLE_EMPTY = exports.STYLE_EMPTY = Object.assign({}, STYLE_CELL, { backgroundColor: 'white' });
+	var STYLE_SNAKE = exports.STYLE_SNAKE = Object.assign({}, STYLE_CELL, { backgroundColor: '#66ff99' });
+	var STYLE_APPLE = exports.STYLE_APPLE = Object.assign({}, STYLE_CELL, { backgroundColor: 'red' });
 
 /***/ }
 /******/ ]);

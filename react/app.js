@@ -121,24 +121,24 @@ class App extends React.Component {
         this.setState({isPlaying: false})
     }
     render() {
-        const cellStyle = n => 1 === n ? CONST.STYLE_SNAKE : (2 === n ? CONST.STYLE_APPLE : CONST.STYLE_CELL)
+        const cellStyle = n => 1 === n ? CONST.STYLE_SNAKE : (2 === n ? CONST.STYLE_APPLE : CONST.STYLE_EMPTY)
         return  <div>
-                    <div style={{display: 'table'}}>
-                        <div style={{display: 'table-row'}}>
-                            <div style={{display: 'table-cell'}}>
+                    <div style={CONST.STYLE_TABLE}>
+                        <div style={CONST.STYLE_TABLE_ROW}>
+                            <div style={CONST.STYLE_TABLE_CELL}>
                             {
                                 this.state.isPlaying
                                 ? <button onClick={this.stopGameHandler}>Pause Game</button>
                                 : <button onClick={this.startGameHandler}>Start Game</button>
                             }
                             </div>
-                            <div style={{display:'table-cell', paddingLeft: '50px'}}>
+                            <div style={CONST.STYLE_TABLE_CELL_PAD}>
                                 Direction: {CONST.DIRECTION_NAMES[this.state.direction]}
                             </div>
-                            <div style={{display: 'table-cell', paddingLeft: '50px'}}>
+                            <div style={CONST.STYLE_TABLE_CELL_PAD}>
                                 Score: {this.state.score}
                             </div>
-                            <div style={{display: 'table-cell', paddingLeft: '50px'}}>
+                            <div style={CONST.STYLE_TABLE_CELL_PAD}>
                                 Speed:
                             {
                                 this.state.isPlaying
@@ -153,10 +153,10 @@ class App extends React.Component {
                             </div>
                         </div>
                     </div>
-                    <div style={CONST.STYLE_PANEL}>
+                    <div style={CONST.STYLE_BOARD}>
                     {
                         this.state.scene.map(function(row, index) {
-                            return  <div key={index} style={CONST.STYLE_ROW}>
+                            return  <div key={index} style={CONST.STYLE_TABLE_ROW}>
                                     {
                                         row.map(function(col, index2) {
                                             return  <div key={index2} style={cellStyle(col)}>

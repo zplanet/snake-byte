@@ -26,9 +26,15 @@ export const SIZE_CELL = 10
 export const NUM_ROWS = 30
 export const NUM_COLS = 80
 
-export const STYLE_PANEL = {width: (SIZE_CELL * NUM_COLS), height: (SIZE_CELL * NUM_ROWS), display: 'table', borderStyle: 'solid'}
-export const STYLE_ROW = {display: 'table-row'}
-export const STYLE_CELL = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'white', display: 'table-cell'}
-export const STYLE_SNAKE = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: '#66ff99', display: 'table-cell'}
-export const STYLE_APPLE = {width: SIZE_CELL, height: SIZE_CELL, backgroundColor: 'red', display: 'table-cell'}
+export const STYLE_TABLE = {display: 'table'}
+export const STYLE_TABLE_ROW = {display: 'table-row'}
+export const STYLE_TABLE_CELL = {display: 'table-cell'}
+export const STYLE_TABLE_CELL_PAD = Object.assign({}, STYLE_TABLE_CELL, {paddingLeft: '50px'})
+
+export const STYLE_BOARD = {display: 'table', width: (SIZE_CELL * NUM_COLS), height: (SIZE_CELL * NUM_ROWS), borderStyle: 'solid'}
+
+const STYLE_CELL = {display: 'table-cell', width: SIZE_CELL, height: SIZE_CELL}
+export const STYLE_EMPTY = Object.assign({}, STYLE_CELL, {backgroundColor: 'white'})
+export const STYLE_SNAKE = Object.assign({}, STYLE_CELL, {backgroundColor: '#66ff99'})
+export const STYLE_APPLE = Object.assign({}, STYLE_CELL, {backgroundColor: 'red'})
 
