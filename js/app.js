@@ -21633,9 +21633,7 @@
 	        value: function startGameHandler() {
 	            var _this2 = this;
 
-	            var ke$ = _rxjs2.default.Observable.fromEvent(document, 'keydown').takeWhile(function (x) {
-	                return _this2.state.isPlaying;
-	            }).filter(function (e) {
+	            var ke$ = _rxjs2.default.Observable.fromEvent(document, 'keydown').filter(function (e) {
 	                return 36 < e.keyCode && e.keyCode < 41;
 	            }) // arrow keys only
 	            .filter(function (e) {
@@ -21644,9 +21642,7 @@
 	                return _this2.setState({ direction: e.keyCode });
 	            });
 
-	            var tm$ = _rxjs2.default.Observable.timer(1000, this.state.speed).takeWhile(function (x) {
-	                return _this2.state.isPlaying;
-	            }).subscribe(this.update);
+	            var tm$ = _rxjs2.default.Observable.timer(1000, this.state.speed).subscribe(this.update);
 
 	            this.setState({ isPlaying: true, keyEvent$: ke$, timer$: tm$ });
 	        }
