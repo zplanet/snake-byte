@@ -705,17 +705,6 @@
 	  }
 	};
 
-	var fiveArgumentPooler = function (a1, a2, a3, a4, a5) {
-	  var Klass = this;
-	  if (Klass.instancePool.length) {
-	    var instance = Klass.instancePool.pop();
-	    Klass.call(instance, a1, a2, a3, a4, a5);
-	    return instance;
-	  } else {
-	    return new Klass(a1, a2, a3, a4, a5);
-	  }
-	};
-
 	var standardReleaser = function (instance) {
 	  var Klass = this;
 	  !(instance instanceof Klass) ? process.env.NODE_ENV !== 'production' ? invariant(false, 'Trying to release an instance into a pool of a different type.') : _prodInvariant('25') : void 0;
@@ -755,8 +744,7 @@
 	  oneArgumentPooler: oneArgumentPooler,
 	  twoArgumentPooler: twoArgumentPooler,
 	  threeArgumentPooler: threeArgumentPooler,
-	  fourArgumentPooler: fourArgumentPooler,
-	  fiveArgumentPooler: fiveArgumentPooler
+	  fourArgumentPooler: fourArgumentPooler
 	};
 
 	module.exports = PooledClass;
@@ -3096,7 +3084,14 @@
 	    // We warn in this case but don't throw. We expect the element creation to
 	    // succeed and there will likely be errors in render.
 	    if (!validType) {
-	      process.env.NODE_ENV !== 'production' ? warning(false, 'React.createElement: type should not be null, undefined, boolean, or ' + 'number. It should be a string (for DOM elements) or a ReactClass ' + '(for composite components).%s', getDeclarationErrorAddendum()) : void 0;
+	      if (typeof type !== 'function' && typeof type !== 'string') {
+	        var info = '';
+	        if (type === undefined || typeof type === 'object' && type !== null && Object.keys(type).length === 0) {
+	          info += ' You likely forgot to export your component from the file ' + 'it\'s defined in.';
+	        }
+	        info += getDeclarationErrorAddendum();
+	        process.env.NODE_ENV !== 'production' ? warning(false, 'React.createElement: type is invalid -- expected a string (for ' + 'built-in components) or a class/function (for composite ' + 'components) but got: %s.%s', type == null ? type : typeof type, info) : void 0;
+	      }
 	    }
 
 	    var element = ReactElement.createElement.apply(this, arguments);
@@ -4067,7 +4062,7 @@
 
 	'use strict';
 
-	module.exports = '15.4.1';
+	module.exports = '15.4.2';
 
 /***/ },
 /* 31 */
@@ -4266,6 +4261,13 @@
 	var internalInstanceKey = '__reactInternalInstance$' + Math.random().toString(36).slice(2);
 
 	/**
+	 * Check if a given node should be cached.
+	 */
+	function shouldPrecacheNode(node, nodeID) {
+	  return node.nodeType === 1 && node.getAttribute(ATTR_NAME) === String(nodeID) || node.nodeType === 8 && node.nodeValue === ' react-text: ' + nodeID + ' ' || node.nodeType === 8 && node.nodeValue === ' react-empty: ' + nodeID + ' ';
+	}
+
+	/**
 	 * Drill down (through composites and empty components) until we get a host or
 	 * host text component.
 	 *
@@ -4330,7 +4332,7 @@
 	    }
 	    // We assume the child nodes are in the same order as the child instances.
 	    for (; childNode !== null; childNode = childNode.nextSibling) {
-	      if (childNode.nodeType === 1 && childNode.getAttribute(ATTR_NAME) === String(childID) || childNode.nodeType === 8 && childNode.nodeValue === ' react-text: ' + childID + ' ' || childNode.nodeType === 8 && childNode.nodeValue === ' react-empty: ' + childID + ' ') {
+	      if (shouldPrecacheNode(childNode, childID)) {
 	        precacheNode(childInst, childNode);
 	        continue outer;
 	      }
@@ -6571,17 +6573,6 @@
 	  }
 	};
 
-	var fiveArgumentPooler = function (a1, a2, a3, a4, a5) {
-	  var Klass = this;
-	  if (Klass.instancePool.length) {
-	    var instance = Klass.instancePool.pop();
-	    Klass.call(instance, a1, a2, a3, a4, a5);
-	    return instance;
-	  } else {
-	    return new Klass(a1, a2, a3, a4, a5);
-	  }
-	};
-
 	var standardReleaser = function (instance) {
 	  var Klass = this;
 	  !(instance instanceof Klass) ? process.env.NODE_ENV !== 'production' ? invariant(false, 'Trying to release an instance into a pool of a different type.') : _prodInvariant('25') : void 0;
@@ -6621,8 +6612,7 @@
 	  oneArgumentPooler: oneArgumentPooler,
 	  twoArgumentPooler: twoArgumentPooler,
 	  threeArgumentPooler: threeArgumentPooler,
-	  fourArgumentPooler: fourArgumentPooler,
-	  fiveArgumentPooler: fiveArgumentPooler
+	  fourArgumentPooler: fourArgumentPooler
 	};
 
 	module.exports = PooledClass;
@@ -11440,12 +11430,18 @@
 	    } else {
 	      var contentToUse = CONTENT_TYPES[typeof props.children] ? props.children : null;
 	      var childrenToUse = contentToUse != null ? null : props.children;
+	      // TODO: Validate that text is allowed as a child of this node
 	      if (contentToUse != null) {
-	        // TODO: Validate that text is allowed as a child of this node
-	        if (process.env.NODE_ENV !== 'production') {
-	          setAndValidateContentChildDev.call(this, contentToUse);
+	        // Avoid setting textContent when the text is empty. In IE11 setting
+	        // textContent on a text area will cause the placeholder to not
+	        // show within the textarea until it has been focused and blurred again.
+	        // https://github.com/facebook/react/issues/6731#issuecomment-254874553
+	        if (contentToUse !== '') {
+	          if (process.env.NODE_ENV !== 'production') {
+	            setAndValidateContentChildDev.call(this, contentToUse);
+	          }
+	          DOMLazyTree.queueText(lazyTree, contentToUse);
 	        }
-	        DOMLazyTree.queueText(lazyTree, contentToUse);
 	      } else if (childrenToUse != null) {
 	        var mountImages = this.mountChildren(childrenToUse, transaction, context);
 	        for (var i = 0; i < mountImages.length; i++) {
@@ -13365,7 +13361,17 @@
 	      }
 	    } else {
 	      if (props.value == null && props.defaultValue != null) {
-	        node.defaultValue = '' + props.defaultValue;
+	        // In Chrome, assigning defaultValue to certain input types triggers input validation.
+	        // For number inputs, the display value loses trailing decimal points. For email inputs,
+	        // Chrome raises "The specified value <x> is not a valid email address".
+	        //
+	        // Here we check to see if the defaultValue has actually changed, avoiding these problems
+	        // when the user is inputting text
+	        //
+	        // https://github.com/facebook/react/issues/7253
+	        if (node.defaultValue !== '' + props.defaultValue) {
+	          node.defaultValue = '' + props.defaultValue;
+	        }
 	      }
 	      if (props.checked == null && props.defaultChecked != null) {
 	        node.defaultChecked = !!props.defaultChecked;
@@ -14112,9 +14118,15 @@
 	    // This is in postMount because we need access to the DOM node, which is not
 	    // available until after the component has mounted.
 	    var node = ReactDOMComponentTree.getNodeFromInstance(inst);
+	    var textContent = node.textContent;
 
-	    // Warning: node.value may be the empty string at this point (IE11) if placeholder is set.
-	    node.value = node.textContent; // Detach value from defaultValue
+	    // Only set node.value if textContent is equal to the expected
+	    // initial value. In IE10/IE11 there is a bug where the placeholder attribute
+	    // will populate textContent as well.
+	    // https://developer.microsoft.com/microsoft-edge/platform/issues/101525/
+	    if (textContent === inst._wrapperState.initialValue) {
+	      node.value = textContent;
+	    }
 	  }
 	};
 
@@ -14916,7 +14928,17 @@
 	    instance = ReactEmptyComponent.create(instantiateReactComponent);
 	  } else if (typeof node === 'object') {
 	    var element = node;
-	    !(element && (typeof element.type === 'function' || typeof element.type === 'string')) ? process.env.NODE_ENV !== 'production' ? invariant(false, 'Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s', element.type == null ? element.type : typeof element.type, getDeclarationErrorAddendum(element._owner)) : _prodInvariant('130', element.type == null ? element.type : typeof element.type, getDeclarationErrorAddendum(element._owner)) : void 0;
+	    var type = element.type;
+	    if (typeof type !== 'function' && typeof type !== 'string') {
+	      var info = '';
+	      if (process.env.NODE_ENV !== 'production') {
+	        if (type === undefined || typeof type === 'object' && type !== null && Object.keys(type).length === 0) {
+	          info += ' You likely forgot to export your component from the file ' + 'it\'s defined in.';
+	        }
+	      }
+	      info += getDeclarationErrorAddendum(element._owner);
+	       true ? process.env.NODE_ENV !== 'production' ? invariant(false, 'Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s', type == null ? type : typeof type, info) : _prodInvariant('130', type == null ? type : typeof type, info) : void 0;
+	    }
 
 	    // Special case string values
 	    if (typeof element.type === 'string') {
@@ -15206,7 +15228,7 @@
 	      // Since plain JS classes are defined without any special initialization
 	      // logic, we can not catch common errors early. Therefore, we have to
 	      // catch them here, at initialization time, instead.
-	      process.env.NODE_ENV !== 'production' ? warning(!inst.getInitialState || inst.getInitialState.isReactClassApproved, 'getInitialState was defined on %s, a plain JavaScript class. ' + 'This is only supported for classes created using React.createClass. ' + 'Did you mean to define a state property instead?', this.getName() || 'a component') : void 0;
+	      process.env.NODE_ENV !== 'production' ? warning(!inst.getInitialState || inst.getInitialState.isReactClassApproved || inst.state, 'getInitialState was defined on %s, a plain JavaScript class. ' + 'This is only supported for classes created using React.createClass. ' + 'Did you mean to define a state property instead?', this.getName() || 'a component') : void 0;
 	      process.env.NODE_ENV !== 'production' ? warning(!inst.getDefaultProps || inst.getDefaultProps.isReactClassApproved, 'getDefaultProps was defined on %s, a plain JavaScript class. ' + 'This is only supported for classes created using React.createClass. ' + 'Use a static property to define defaultProps instead.', this.getName() || 'a component') : void 0;
 	      process.env.NODE_ENV !== 'production' ? warning(!inst.propTypes, 'propTypes was defined as an instance property on %s. Use a static ' + 'property to define propTypes instead.', this.getName() || 'a component') : void 0;
 	      process.env.NODE_ENV !== 'production' ? warning(!inst.contextTypes, 'contextTypes was defined as an instance property on %s. Use a ' + 'static property to define contextTypes instead.', this.getName() || 'a component') : void 0;
@@ -16210,14 +16232,11 @@
 
 	'use strict';
 
-	var _prodInvariant = __webpack_require__(35),
-	    _assign = __webpack_require__(4);
+	var _prodInvariant = __webpack_require__(35);
 
 	var invariant = __webpack_require__(8);
 
 	var genericComponentClass = null;
-	// This registry keeps track of wrapper classes around host tags.
-	var tagToComponentClass = {};
 	var textComponentClass = null;
 
 	var ReactHostComponentInjection = {
@@ -16230,11 +16249,6 @@
 	  // rendered as props.
 	  injectTextComponentClass: function (componentClass) {
 	    textComponentClass = componentClass;
-	  },
-	  // This accepts a keyed object with classes as values. Each key represents a
-	  // tag. That particular tag will use this class instead of the generic one.
-	  injectComponentClasses: function (componentClasses) {
-	    _assign(tagToComponentClass, componentClasses);
 	  }
 	};
 
@@ -21089,7 +21103,7 @@
 
 	'use strict';
 
-	module.exports = '15.4.1';
+	module.exports = '15.4.2';
 
 /***/ },
 /* 172 */
@@ -21493,7 +21507,7 @@
 
 	var _rxjs2 = _interopRequireDefault(_rxjs);
 
-	var _constants = __webpack_require__(521);
+	var _constants = __webpack_require__(522);
 
 	var CONST = _interopRequireWildcard(_constants);
 
@@ -21771,132 +21785,132 @@
 	__webpack_require__(197);
 	__webpack_require__(201);
 	__webpack_require__(204);
-	__webpack_require__(216);
-	__webpack_require__(220);
-	__webpack_require__(223);
-	__webpack_require__(225);
-	__webpack_require__(228);
-	__webpack_require__(236);
-	__webpack_require__(239);
-	__webpack_require__(242);
-	__webpack_require__(244);
-	__webpack_require__(246);
-	__webpack_require__(249);
-	__webpack_require__(258);
-	__webpack_require__(261);
-	__webpack_require__(263);
-	__webpack_require__(267);
-	__webpack_require__(269);
-	__webpack_require__(271);
-	__webpack_require__(274);
-	__webpack_require__(277);
-	__webpack_require__(280);
-	__webpack_require__(283);
-	__webpack_require__(287);
+	__webpack_require__(217);
+	__webpack_require__(221);
+	__webpack_require__(224);
+	__webpack_require__(226);
+	__webpack_require__(229);
+	__webpack_require__(237);
+	__webpack_require__(240);
+	__webpack_require__(243);
+	__webpack_require__(245);
+	__webpack_require__(247);
+	__webpack_require__(250);
+	__webpack_require__(259);
+	__webpack_require__(262);
+	__webpack_require__(264);
+	__webpack_require__(268);
+	__webpack_require__(270);
+	__webpack_require__(272);
+	__webpack_require__(275);
+	__webpack_require__(278);
+	__webpack_require__(281);
+	__webpack_require__(284);
+	__webpack_require__(288);
 	//dom
-	__webpack_require__(290);
-	__webpack_require__(294);
+	__webpack_require__(291);
+	__webpack_require__(295);
 	//operators
-	__webpack_require__(302);
-	__webpack_require__(304);
-	__webpack_require__(306);
-	__webpack_require__(308);
-	__webpack_require__(310);
-	__webpack_require__(312);
-	__webpack_require__(314);
-	__webpack_require__(316);
+	__webpack_require__(303);
+	__webpack_require__(305);
+	__webpack_require__(307);
+	__webpack_require__(309);
+	__webpack_require__(311);
+	__webpack_require__(313);
+	__webpack_require__(315);
 	__webpack_require__(317);
 	__webpack_require__(318);
-	__webpack_require__(320);
-	__webpack_require__(323);
-	__webpack_require__(326);
-	__webpack_require__(328);
-	__webpack_require__(330);
-	__webpack_require__(332);
-	__webpack_require__(334);
-	__webpack_require__(336);
-	__webpack_require__(338);
-	__webpack_require__(340);
-	__webpack_require__(343);
-	__webpack_require__(345);
-	__webpack_require__(347);
-	__webpack_require__(349);
-	__webpack_require__(351);
-	__webpack_require__(353);
-	__webpack_require__(355);
-	__webpack_require__(358);
-	__webpack_require__(360);
-	__webpack_require__(362);
-	__webpack_require__(364);
-	__webpack_require__(366);
-	__webpack_require__(369);
-	__webpack_require__(374);
-	__webpack_require__(376);
-	__webpack_require__(378);
-	__webpack_require__(380);
-	__webpack_require__(382);
-	__webpack_require__(384);
-	__webpack_require__(386);
-	__webpack_require__(388);
+	__webpack_require__(319);
+	__webpack_require__(321);
+	__webpack_require__(324);
+	__webpack_require__(327);
+	__webpack_require__(329);
+	__webpack_require__(331);
+	__webpack_require__(333);
+	__webpack_require__(335);
+	__webpack_require__(337);
+	__webpack_require__(339);
+	__webpack_require__(341);
+	__webpack_require__(344);
+	__webpack_require__(346);
+	__webpack_require__(348);
+	__webpack_require__(350);
+	__webpack_require__(352);
+	__webpack_require__(354);
+	__webpack_require__(356);
+	__webpack_require__(359);
+	__webpack_require__(361);
+	__webpack_require__(363);
+	__webpack_require__(365);
+	__webpack_require__(367);
+	__webpack_require__(370);
+	__webpack_require__(375);
+	__webpack_require__(377);
+	__webpack_require__(379);
+	__webpack_require__(381);
+	__webpack_require__(383);
+	__webpack_require__(385);
+	__webpack_require__(387);
 	__webpack_require__(389);
-	__webpack_require__(391);
-	__webpack_require__(393);
-	__webpack_require__(396);
+	__webpack_require__(390);
+	__webpack_require__(392);
+	__webpack_require__(394);
 	__webpack_require__(397);
 	__webpack_require__(398);
 	__webpack_require__(399);
 	__webpack_require__(400);
-	__webpack_require__(402);
-	__webpack_require__(404);
-	__webpack_require__(407);
+	__webpack_require__(401);
+	__webpack_require__(403);
+	__webpack_require__(405);
 	__webpack_require__(408);
 	__webpack_require__(409);
-	__webpack_require__(411);
-	__webpack_require__(414);
-	__webpack_require__(416);
-	__webpack_require__(418);
-	__webpack_require__(421);
-	__webpack_require__(423);
-	__webpack_require__(425);
+	__webpack_require__(410);
+	__webpack_require__(412);
+	__webpack_require__(415);
+	__webpack_require__(417);
+	__webpack_require__(419);
+	__webpack_require__(422);
+	__webpack_require__(424);
 	__webpack_require__(426);
 	__webpack_require__(427);
-	__webpack_require__(429);
-	__webpack_require__(431);
-	__webpack_require__(433);
-	__webpack_require__(435);
-	__webpack_require__(437);
-	__webpack_require__(439);
-	__webpack_require__(441);
-	__webpack_require__(443);
-	__webpack_require__(445);
-	__webpack_require__(447);
-	__webpack_require__(449);
-	__webpack_require__(451);
-	__webpack_require__(453);
-	__webpack_require__(455);
-	__webpack_require__(464);
-	__webpack_require__(466);
-	__webpack_require__(468);
-	__webpack_require__(470);
-	__webpack_require__(472);
-	__webpack_require__(474);
-	__webpack_require__(476);
-	__webpack_require__(478);
-	__webpack_require__(480);
-	__webpack_require__(482);
-	__webpack_require__(484);
-	__webpack_require__(487);
-	__webpack_require__(489);
-	__webpack_require__(491);
-	__webpack_require__(493);
-	__webpack_require__(495);
-	__webpack_require__(497);
-	__webpack_require__(499);
-	__webpack_require__(501);
-	__webpack_require__(503);
-	__webpack_require__(505);
-	__webpack_require__(507);
+	__webpack_require__(428);
+	__webpack_require__(430);
+	__webpack_require__(432);
+	__webpack_require__(434);
+	__webpack_require__(436);
+	__webpack_require__(438);
+	__webpack_require__(440);
+	__webpack_require__(442);
+	__webpack_require__(444);
+	__webpack_require__(446);
+	__webpack_require__(448);
+	__webpack_require__(450);
+	__webpack_require__(452);
+	__webpack_require__(454);
+	__webpack_require__(456);
+	__webpack_require__(465);
+	__webpack_require__(467);
+	__webpack_require__(469);
+	__webpack_require__(471);
+	__webpack_require__(473);
+	__webpack_require__(475);
+	__webpack_require__(477);
+	__webpack_require__(479);
+	__webpack_require__(481);
+	__webpack_require__(483);
+	__webpack_require__(485);
+	__webpack_require__(488);
+	__webpack_require__(490);
+	__webpack_require__(492);
+	__webpack_require__(494);
+	__webpack_require__(496);
+	__webpack_require__(498);
+	__webpack_require__(500);
+	__webpack_require__(502);
+	__webpack_require__(504);
+	__webpack_require__(506);
 	__webpack_require__(508);
+	__webpack_require__(509);
 	/* tslint:disable:no-unused-variable */
 	var Subscription_1 = __webpack_require__(186);
 	exports.Subscription = Subscription_1.Subscription;
@@ -21904,42 +21918,42 @@
 	exports.Subscriber = Subscriber_1.Subscriber;
 	var AsyncSubject_1 = __webpack_require__(200);
 	exports.AsyncSubject = AsyncSubject_1.AsyncSubject;
-	var ReplaySubject_1 = __webpack_require__(297);
+	var ReplaySubject_1 = __webpack_require__(298);
 	exports.ReplaySubject = ReplaySubject_1.ReplaySubject;
-	var BehaviorSubject_1 = __webpack_require__(420);
+	var BehaviorSubject_1 = __webpack_require__(421);
 	exports.BehaviorSubject = BehaviorSubject_1.BehaviorSubject;
-	var ConnectableObservable_1 = __webpack_require__(406);
+	var ConnectableObservable_1 = __webpack_require__(407);
 	exports.ConnectableObservable = ConnectableObservable_1.ConnectableObservable;
-	var Notification_1 = __webpack_require__(235);
+	var Notification_1 = __webpack_require__(236);
 	exports.Notification = Notification_1.Notification;
-	var EmptyError_1 = __webpack_require__(368);
+	var EmptyError_1 = __webpack_require__(369);
 	exports.EmptyError = EmptyError_1.EmptyError;
-	var ArgumentOutOfRangeError_1 = __webpack_require__(357);
+	var ArgumentOutOfRangeError_1 = __webpack_require__(358);
 	exports.ArgumentOutOfRangeError = ArgumentOutOfRangeError_1.ArgumentOutOfRangeError;
 	var ObjectUnsubscribedError_1 = __webpack_require__(195);
 	exports.ObjectUnsubscribedError = ObjectUnsubscribedError_1.ObjectUnsubscribedError;
-	var TimeoutError_1 = __webpack_require__(486);
+	var TimeoutError_1 = __webpack_require__(487);
 	exports.TimeoutError = TimeoutError_1.TimeoutError;
 	var UnsubscriptionError_1 = __webpack_require__(191);
 	exports.UnsubscriptionError = UnsubscriptionError_1.UnsubscriptionError;
-	var timeInterval_1 = __webpack_require__(483);
+	var timeInterval_1 = __webpack_require__(484);
 	exports.TimeInterval = timeInterval_1.TimeInterval;
-	var timestamp_1 = __webpack_require__(490);
+	var timestamp_1 = __webpack_require__(491);
 	exports.Timestamp = timestamp_1.Timestamp;
-	var TestScheduler_1 = __webpack_require__(510);
+	var TestScheduler_1 = __webpack_require__(511);
 	exports.TestScheduler = TestScheduler_1.TestScheduler;
-	var VirtualTimeScheduler_1 = __webpack_require__(516);
+	var VirtualTimeScheduler_1 = __webpack_require__(517);
 	exports.VirtualTimeScheduler = VirtualTimeScheduler_1.VirtualTimeScheduler;
-	var AjaxObservable_1 = __webpack_require__(292);
+	var AjaxObservable_1 = __webpack_require__(293);
 	exports.AjaxResponse = AjaxObservable_1.AjaxResponse;
 	exports.AjaxError = AjaxObservable_1.AjaxError;
 	exports.AjaxTimeoutError = AjaxObservable_1.AjaxTimeoutError;
-	var asap_1 = __webpack_require__(458);
-	var async_1 = __webpack_require__(253);
-	var queue_1 = __webpack_require__(298);
-	var animationFrame_1 = __webpack_require__(517);
+	var asap_1 = __webpack_require__(459);
+	var async_1 = __webpack_require__(254);
+	var queue_1 = __webpack_require__(299);
+	var animationFrame_1 = __webpack_require__(518);
 	var rxSubscriber_1 = __webpack_require__(193);
-	var iterator_1 = __webpack_require__(214);
+	var iterator_1 = __webpack_require__(215);
 	var observable_1 = __webpack_require__(194);
 	/* tslint:enable:no-unused-variable */
 	/**
@@ -22078,6 +22092,14 @@
 	        this.closed = true;
 	        this.observers = null;
 	    };
+	    Subject.prototype._trySubscribe = function (subscriber) {
+	        if (this.closed) {
+	            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+	        }
+	        else {
+	            return _super.prototype._trySubscribe.call(this, subscriber);
+	        }
+	    };
 	    Subject.prototype._subscribe = function (subscriber) {
 	        if (this.closed) {
 	            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
@@ -22196,7 +22218,7 @@
 	            operator.call(sink, this.source);
 	        }
 	        else {
-	            sink.add(this._subscribe(sink));
+	            sink.add(this._trySubscribe(sink));
 	        }
 	        if (sink.syncErrorThrowable) {
 	            sink.syncErrorThrowable = false;
@@ -22205,6 +22227,16 @@
 	            }
 	        }
 	        return sink;
+	    };
+	    Observable.prototype._trySubscribe = function (sink) {
+	        try {
+	            return this._subscribe(sink);
+	        }
+	        catch (err) {
+	            sink.syncErrorThrown = true;
+	            sink.syncErrorValue = err;
+	            sink.error(err);
+	        }
 	    };
 	    /**
 	     * @method forEach
@@ -22464,6 +22496,17 @@
 	        this.destination.complete();
 	        this.unsubscribe();
 	    };
+	    Subscriber.prototype._unsubscribeAndRecycle = function () {
+	        var _a = this, _parent = _a._parent, _parents = _a._parents;
+	        this._parent = null;
+	        this._parents = null;
+	        this.unsubscribe();
+	        this.closed = false;
+	        this.isStopped = false;
+	        this._parent = _parent;
+	        this._parents = _parents;
+	        return this;
+	    };
 	    return Subscriber;
 	}(Subscription_1.Subscription));
 	exports.Subscriber = Subscriber;
@@ -22474,9 +22517,9 @@
 	 */
 	var SafeSubscriber = (function (_super) {
 	    __extends(SafeSubscriber, _super);
-	    function SafeSubscriber(_parent, observerOrNext, error, complete) {
+	    function SafeSubscriber(_parentSubscriber, observerOrNext, error, complete) {
 	        _super.call(this);
-	        this._parent = _parent;
+	        this._parentSubscriber = _parentSubscriber;
 	        var next;
 	        var context = this;
 	        if (isFunction_1.isFunction(observerOrNext)) {
@@ -22499,49 +22542,49 @@
 	    }
 	    SafeSubscriber.prototype.next = function (value) {
 	        if (!this.isStopped && this._next) {
-	            var _parent = this._parent;
-	            if (!_parent.syncErrorThrowable) {
+	            var _parentSubscriber = this._parentSubscriber;
+	            if (!_parentSubscriber.syncErrorThrowable) {
 	                this.__tryOrUnsub(this._next, value);
 	            }
-	            else if (this.__tryOrSetError(_parent, this._next, value)) {
+	            else if (this.__tryOrSetError(_parentSubscriber, this._next, value)) {
 	                this.unsubscribe();
 	            }
 	        }
 	    };
 	    SafeSubscriber.prototype.error = function (err) {
 	        if (!this.isStopped) {
-	            var _parent = this._parent;
+	            var _parentSubscriber = this._parentSubscriber;
 	            if (this._error) {
-	                if (!_parent.syncErrorThrowable) {
+	                if (!_parentSubscriber.syncErrorThrowable) {
 	                    this.__tryOrUnsub(this._error, err);
 	                    this.unsubscribe();
 	                }
 	                else {
-	                    this.__tryOrSetError(_parent, this._error, err);
+	                    this.__tryOrSetError(_parentSubscriber, this._error, err);
 	                    this.unsubscribe();
 	                }
 	            }
-	            else if (!_parent.syncErrorThrowable) {
+	            else if (!_parentSubscriber.syncErrorThrowable) {
 	                this.unsubscribe();
 	                throw err;
 	            }
 	            else {
-	                _parent.syncErrorValue = err;
-	                _parent.syncErrorThrown = true;
+	                _parentSubscriber.syncErrorValue = err;
+	                _parentSubscriber.syncErrorThrown = true;
 	                this.unsubscribe();
 	            }
 	        }
 	    };
 	    SafeSubscriber.prototype.complete = function () {
 	        if (!this.isStopped) {
-	            var _parent = this._parent;
+	            var _parentSubscriber = this._parentSubscriber;
 	            if (this._complete) {
-	                if (!_parent.syncErrorThrowable) {
+	                if (!_parentSubscriber.syncErrorThrowable) {
 	                    this.__tryOrUnsub(this._complete);
 	                    this.unsubscribe();
 	                }
 	                else {
-	                    this.__tryOrSetError(_parent, this._complete);
+	                    this.__tryOrSetError(_parentSubscriber, this._complete);
 	                    this.unsubscribe();
 	                }
 	            }
@@ -22571,10 +22614,10 @@
 	        return false;
 	    };
 	    SafeSubscriber.prototype._unsubscribe = function () {
-	        var _parent = this._parent;
+	        var _parentSubscriber = this._parentSubscriber;
 	        this._context = null;
-	        this._parent = null;
-	        _parent.unsubscribe();
+	        this._parentSubscriber = null;
+	        _parentSubscriber.unsubscribe();
 	    };
 	    return SafeSubscriber;
 	}(Subscriber));
@@ -22625,6 +22668,9 @@
 	         * @type {boolean}
 	         */
 	        this.closed = false;
+	        this._parent = null;
+	        this._parents = null;
+	        this._subscriptions = null;
 	        if (unsubscribe) {
 	            this._unsubscribe = unsubscribe;
 	        }
@@ -22641,19 +22687,34 @@
 	        if (this.closed) {
 	            return;
 	        }
+	        var _a = this, _parent = _a._parent, _parents = _a._parents, _unsubscribe = _a._unsubscribe, _subscriptions = _a._subscriptions;
 	        this.closed = true;
-	        var _a = this, _unsubscribe = _a._unsubscribe, _subscriptions = _a._subscriptions;
+	        this._parent = null;
+	        this._parents = null;
+	        // null out _subscriptions first so any child subscriptions that attempt
+	        // to remove themselves from this subscription will noop
 	        this._subscriptions = null;
+	        var index = -1;
+	        var len = _parents ? _parents.length : 0;
+	        // if this._parent is null, then so is this._parents, and we
+	        // don't have to remove ourselves from any parent subscriptions.
+	        while (_parent) {
+	            _parent.remove(this);
+	            // if this._parents is null or index >= len,
+	            // then _parent is set to null, and the loop exits
+	            _parent = ++index < len && _parents[index] || null;
+	        }
 	        if (isFunction_1.isFunction(_unsubscribe)) {
 	            var trial = tryCatch_1.tryCatch(_unsubscribe).call(this);
 	            if (trial === errorObject_1.errorObject) {
 	                hasErrors = true;
-	                (errors = errors || []).push(errorObject_1.errorObject.e);
+	                errors = errors || (errorObject_1.errorObject.e instanceof UnsubscriptionError_1.UnsubscriptionError ?
+	                    flattenUnsubscriptionErrors(errorObject_1.errorObject.e.errors) : [errorObject_1.errorObject.e]);
 	            }
 	        }
 	        if (isArray_1.isArray(_subscriptions)) {
-	            var index = -1;
-	            var len = _subscriptions.length;
+	            index = -1;
+	            len = _subscriptions.length;
 	            while (++index < len) {
 	                var sub = _subscriptions[index];
 	                if (isObject_1.isObject(sub)) {
@@ -22663,7 +22724,7 @@
 	                        errors = errors || [];
 	                        var err = errorObject_1.errorObject.e;
 	                        if (err instanceof UnsubscriptionError_1.UnsubscriptionError) {
-	                            errors = errors.concat(err.errors);
+	                            errors = errors.concat(flattenUnsubscriptionErrors(err.errors));
 	                        }
 	                        else {
 	                            errors.push(err);
@@ -22701,25 +22762,31 @@
 	        if (teardown === this) {
 	            return this;
 	        }
-	        var sub = teardown;
+	        var subscription = teardown;
 	        switch (typeof teardown) {
 	            case 'function':
-	                sub = new Subscription(teardown);
+	                subscription = new Subscription(teardown);
 	            case 'object':
-	                if (sub.closed || typeof sub.unsubscribe !== 'function') {
-	                    break;
+	                if (subscription.closed || typeof subscription.unsubscribe !== 'function') {
+	                    return subscription;
 	                }
 	                else if (this.closed) {
-	                    sub.unsubscribe();
+	                    subscription.unsubscribe();
+	                    return subscription;
 	                }
-	                else {
-	                    (this._subscriptions || (this._subscriptions = [])).push(sub);
+	                else if (typeof subscription._addParent !== 'function' /* quack quack */) {
+	                    var tmp = subscription;
+	                    subscription = new Subscription();
+	                    subscription._subscriptions = [tmp];
 	                }
 	                break;
 	            default:
 	                throw new Error('unrecognized teardown ' + teardown + ' added to Subscription.');
 	        }
-	        return sub;
+	        var subscriptions = this._subscriptions || (this._subscriptions = []);
+	        subscriptions.push(subscription);
+	        subscription._addParent(this);
+	        return subscription;
 	    };
 	    /**
 	     * Removes a Subscription from the internal list of subscriptions that will
@@ -22728,16 +22795,29 @@
 	     * @return {void}
 	     */
 	    Subscription.prototype.remove = function (subscription) {
-	        // HACK: This might be redundant because of the logic in `add()`
-	        if (subscription == null || (subscription === this) || (subscription === Subscription.EMPTY)) {
-	            return;
-	        }
 	        var subscriptions = this._subscriptions;
 	        if (subscriptions) {
 	            var subscriptionIndex = subscriptions.indexOf(subscription);
 	            if (subscriptionIndex !== -1) {
 	                subscriptions.splice(subscriptionIndex, 1);
 	            }
+	        }
+	    };
+	    Subscription.prototype._addParent = function (parent) {
+	        var _a = this, _parent = _a._parent, _parents = _a._parents;
+	        if (!_parent || _parent === parent) {
+	            // If we don't have a parent, or the new parent is the same as the
+	            // current parent, then set this._parent to the new parent.
+	            this._parent = parent;
+	        }
+	        else if (!_parents) {
+	            // If there's already one parent, but not multiple, allocate an Array to
+	            // store the rest of the parent Subscriptions.
+	            this._parents = [parent];
+	        }
+	        else if (_parents.indexOf(parent) === -1) {
+	            // Only add the new parent to the _parents list if it's not already there.
+	            _parents.push(parent);
 	        }
 	    };
 	    Subscription.EMPTY = (function (empty) {
@@ -22747,6 +22827,9 @@
 	    return Subscription;
 	}());
 	exports.Subscription = Subscription;
+	function flattenUnsubscriptionErrors(errors) {
+	    return errors.reduce(function (errs, err) { return errs.concat((err instanceof UnsubscriptionError_1.UnsubscriptionError) ? err.errors : err); }, []);
+	}
 	//# sourceMappingURL=Subscription.js.map
 
 /***/ },
@@ -22999,11 +23082,12 @@
 	 */
 	var BoundCallbackObservable = (function (_super) {
 	    __extends(BoundCallbackObservable, _super);
-	    function BoundCallbackObservable(callbackFunc, selector, args, scheduler) {
+	    function BoundCallbackObservable(callbackFunc, selector, args, context, scheduler) {
 	        _super.call(this);
 	        this.callbackFunc = callbackFunc;
 	        this.selector = selector;
 	        this.args = args;
+	        this.context = context;
 	        this.scheduler = scheduler;
 	    }
 	    /* tslint:enable:max-line-length */
@@ -23017,10 +23101,62 @@
 	     * `bindCallback` is not an operator because its input and output are not
 	     * Observables. The input is a function `func` with some parameters, but the
 	     * last parameter must be a callback function that `func` calls when it is
-	     * done. The output of `bindCallback` is a function that takes the same
-	     * parameters as `func`, except the last one (the callback). When the output
-	     * function is called with arguments, it will return an Observable where the
-	     * results will be delivered to.
+	     * done.
+	     *
+	     * The output of `bindCallback` is a function that takes the same parameters
+	     * as `func`, except the last one (the callback). When the output function
+	     * is called with arguments, it will return an Observable. If `func` function
+	     * calls its callback with one argument, the Observable will emit that value.
+	     * If on the other hand callback is called with multiple values, resulting
+	     * Observable will emit an array with these arguments.
+	     *
+	     * It is very important to remember, that input function `func` is not called
+	     * when output function is, but rather when Observable returned by output
+	     * function is subscribed. This means if `func` makes AJAX request, that request
+	     * will be made every time someone subscribes to resulting Observable, but not before.
+	     *
+	     * Optionally, selector function can be passed to `bindObservable`. That function
+	     * takes the same arguments as callback, and returns value
+	     * that will be emitted by Observable instead of callback parameters themselves.
+	     * Even though by default multiple arguments passed to callback appear in the stream as array,
+	     * selector function will be called with arguments directly, just as callback would.
+	     * This means you can imagine default selector (when one is not provided explicitly)
+	     * as function that aggregates all its arguments into array, or simply returns first argument,
+	     * if there is only one.
+	     *
+	     * Last optional parameter - {@link Scheduler} - can be used to control when call
+	     * to `func` happens after someone subscribes to Observable, as well as when results
+	     * passed to callback will be emitted. By default subscription to Observable calls `func`
+	     * synchronously, but using `Scheduler.async` as last parameter will defer call to input function,
+	     * just like wrapping that call in `setTimeout` with time `0` would. So if you use async Scheduler
+	     * and call `subscribe` on output Observable, all function calls that are currently executing,
+	     * will end before `func` is invoked.
+	     *
+	     * When it comes to emitting results passed to callback, by default they are emitted
+	     * immediately after `func` invokes callback. In particular, if callback is called synchronously,
+	     * then subscription to resulting Observable will call `next` function synchronously as well.
+	     * If you want to defer that call, using `Scheduler.async` will, again, do the job.
+	     * This means that by using `Scheduler.async` you can, in a sense, ensure that `func`
+	     * always calls its callback asynchronously, thus avoiding terrifying Zalgo.
+	     *
+	     * Note that Observable created by output function will always emit only one value
+	     * and then complete right after. Even if `func` calls callback multiple times, values from
+	     * second and following calls will never appear in the stream. If you need to
+	     * listen for multiple calls, you probably want to use {@link fromEvent} or
+	     * {@link fromEventPattern} instead.
+	     *
+	     * If `func` depends on some context (`this` property), that context will be set
+	     * to the same context that output function has at call time. In particular, if `func`
+	     * is called as method of some object, in order to preserve proper behaviour,
+	     * it is recommended to set context of output function to that object as well,
+	     * provided `func` is not already bound.
+	     *
+	     * If input function calls its callback in "node style" (i.e. first argument to callback is
+	     * optional error parameter signaling whether call failed or not), {@link bindNodeCallback}
+	     * provides convenient error handling and probably is a better choice.
+	     * `bindCallback` will treat such functions without any difference and error parameter
+	     * (whether passed or not) will always be interpreted as regular callback argument.
+	     *
 	     *
 	     * @example <caption>Convert jQuery's getJSON to an Observable API</caption>
 	     * // Suppose we have jQuery.getJSON('/my/url', callback)
@@ -23028,13 +23164,64 @@
 	     * var result = getJSONAsObservable('/my/url');
 	     * result.subscribe(x => console.log(x), e => console.error(e));
 	     *
+	     *
+	     * @example <caption>Receive array of arguments passed to callback</caption>
+	     * someFunction((a, b, c) => {
+	     *   console.log(a); // 5
+	     *   console.log(b); // 'some string'
+	     *   console.log(c); // {someProperty: 'someValue'}
+	     * });
+	     *
+	     * const boundSomeFunction = Rx.Observable.bindCallback(someFunction);
+	     * boundSomeFunction.subscribe(values => {
+	     *   console.log(values) // [5, 'some string', {someProperty: 'someValue'}]
+	     * });
+	     *
+	     *
+	     * @example <caption>Use bindCallback with selector function</caption>
+	     * someFunction((a, b, c) => {
+	     *   console.log(a); // 'a'
+	     *   console.log(b); // 'b'
+	     *   console.log(c); // 'c'
+	     * });
+	     *
+	     * const boundSomeFunction = Rx.Observable.bindCallback(someFunction, (a, b, c) => a + b + c);
+	     * boundSomeFunction.subscribe(value => {
+	     *   console.log(value) // 'abc'
+	     * });
+	     *
+	     *
+	     * @example <caption>Compare behaviour with and without async Scheduler</caption>
+	     * function iCallMyCallbackSynchronously(cb) {
+	     *   cb();
+	     * }
+	     *
+	     * const boundSyncFn = Rx.Observable.bindCallback(iCallMyCallbackSynchronously);
+	     * const boundAsyncFn = Rx.Observable.bindCallback(iCallMyCallbackSynchronously, null, Rx.Scheduler.async);
+	     *
+	     * boundSyncFn().subscribe(() => console.log('I was sync!'));
+	     * boundAsyncFn().subscribe(() => console.log('I was async!'));
+	     * console.log('This happened...');
+	     *
+	     * // Logs:
+	     * // I was sync!
+	     * // This happened...
+	     * // I was async!
+	     *
+	     *
+	     * @example <caption>Use bindCallback on object method</caption>
+	     * const boundMethod = Rx.Observable.bindCallback(someObject.methodWithCallback);
+	     * boundMethod.call(someObject) // make sure methodWithCallback has access to someObject
+	     * .subscribe(subscriber);
+	     *
+	     *
 	     * @see {@link bindNodeCallback}
 	     * @see {@link from}
 	     * @see {@link fromPromise}
 	     *
 	     * @param {function} func Function with a callback as the last parameter.
 	     * @param {function} [selector] A function which takes the arguments from the
-	     * callback and maps those a value to emit on the output Observable.
+	     * callback and maps those to a value to emit on the output Observable.
 	     * @param {Scheduler} [scheduler] The scheduler on which to schedule the
 	     * callbacks.
 	     * @return {function(...params: *): Observable} A function which returns the
@@ -23050,7 +23237,7 @@
 	            for (var _i = 0; _i < arguments.length; _i++) {
 	                args[_i - 0] = arguments[_i];
 	            }
-	            return new BoundCallbackObservable(func, selector, args, scheduler);
+	            return new BoundCallbackObservable(func, selector, args, this, scheduler);
 	        };
 	    };
 	    BoundCallbackObservable.prototype._subscribe = function (subscriber) {
@@ -23079,13 +23266,13 @@
 	                        }
 	                    }
 	                    else {
-	                        subject.next(innerArgs.length === 1 ? innerArgs[0] : innerArgs);
+	                        subject.next(innerArgs.length <= 1 ? innerArgs[0] : innerArgs);
 	                        subject.complete();
 	                    }
 	                };
 	                // use named function instance to avoid closure.
 	                handler.source = this;
-	                var result = tryCatch_1.tryCatch(callbackFunc).apply(this, args.concat(handler));
+	                var result = tryCatch_1.tryCatch(callbackFunc).apply(this.context, args.concat(handler));
 	                if (result === errorObject_1.errorObject) {
 	                    subject.error(errorObject_1.errorObject.e);
 	                }
@@ -23093,12 +23280,12 @@
 	            return subject.subscribe(subscriber);
 	        }
 	        else {
-	            return scheduler.schedule(BoundCallbackObservable.dispatch, 0, { source: this, subscriber: subscriber });
+	            return scheduler.schedule(BoundCallbackObservable.dispatch, 0, { source: this, subscriber: subscriber, context: this.context });
 	        }
 	    };
 	    BoundCallbackObservable.dispatch = function (state) {
 	        var self = this;
-	        var source = state.source, subscriber = state.subscriber;
+	        var source = state.source, subscriber = state.subscriber, context = state.context;
 	        var callbackFunc = source.callbackFunc, args = source.args, scheduler = source.scheduler;
 	        var subject = source.subject;
 	        if (!subject) {
@@ -23120,13 +23307,13 @@
 	                    }
 	                }
 	                else {
-	                    var value = innerArgs.length === 1 ? innerArgs[0] : innerArgs;
+	                    var value = innerArgs.length <= 1 ? innerArgs[0] : innerArgs;
 	                    self.add(scheduler.schedule(dispatchNext, 0, { value: value, subject: subject }));
 	                }
 	            };
 	            // use named function to pass values in without closure
 	            handler.source = source;
-	            var result = tryCatch_1.tryCatch(callbackFunc).apply(this, args.concat(handler));
+	            var result = tryCatch_1.tryCatch(callbackFunc).apply(context, args.concat(handler));
 	            if (result === errorObject_1.errorObject) {
 	                subject.error(errorObject_1.errorObject.e);
 	            }
@@ -23171,13 +23358,13 @@
 	        this.hasCompleted = false;
 	    }
 	    AsyncSubject.prototype._subscribe = function (subscriber) {
-	        if (this.hasCompleted && this.hasNext) {
-	            subscriber.next(this.value);
-	            subscriber.complete();
+	        if (this.hasError) {
+	            subscriber.error(this.thrownError);
 	            return Subscription_1.Subscription.EMPTY;
 	        }
-	        else if (this.hasError) {
-	            subscriber.error(this.thrownError);
+	        else if (this.hasCompleted && this.hasNext) {
+	            subscriber.next(this.value);
+	            subscriber.complete();
 	            return Subscription_1.Subscription.EMPTY;
 	        }
 	        return _super.prototype._subscribe.call(this, subscriber);
@@ -23186,6 +23373,11 @@
 	        if (!this.hasCompleted) {
 	            this.value = value;
 	            this.hasNext = true;
+	        }
+	    };
+	    AsyncSubject.prototype.error = function (error) {
+	        if (!this.hasCompleted) {
+	            _super.prototype.error.call(this, error);
 	        }
 	    };
 	    AsyncSubject.prototype.complete = function () {
@@ -23240,11 +23432,12 @@
 	 */
 	var BoundNodeCallbackObservable = (function (_super) {
 	    __extends(BoundNodeCallbackObservable, _super);
-	    function BoundNodeCallbackObservable(callbackFunc, selector, args, scheduler) {
+	    function BoundNodeCallbackObservable(callbackFunc, selector, args, context, scheduler) {
 	        _super.call(this);
 	        this.callbackFunc = callbackFunc;
 	        this.selector = selector;
 	        this.args = args;
+	        this.context = context;
 	        this.scheduler = scheduler;
 	    }
 	    /* tslint:enable:max-line-length */
@@ -23259,11 +23452,58 @@
 	     * Observables. The input is a function `func` with some parameters, but the
 	     * last parameter must be a callback function that `func` calls when it is
 	     * done. The callback function is expected to follow Node.js conventions,
-	     * where the first argument to the callback is an error, while remaining
-	     * arguments are the callback result. The output of `bindNodeCallback` is a
-	     * function that takes the same parameters as `func`, except the last one (the
-	     * callback). When the output function is called with arguments, it will
-	     * return an Observable where the results will be delivered to.
+	     * where the first argument to the callback is an error object, signaling
+	     * whether call was successful. If that object is passed to callback, it means
+	     * something went wrong.
+	     *
+	     * The output of `bindNodeCallback` is a function that takes the same
+	     * parameters as `func`, except the last one (the callback). When the output
+	     * function is called with arguments, it will return an Observable.
+	     * If `func` calls its callback with error parameter present, Observable will
+	     * error with that value as well. If error parameter is not passed, Observable will emit
+	     * second parameter. If there are more parameters (third and so on),
+	     * Observable will emit an array with all arguments, except first error argument.
+	     *
+	     * Optionally `bindNodeCallback` accepts selector function, which allows you to
+	     * make resulting Observable emit value computed by selector, instead of regular
+	     * callback arguments. It works similarly to {@link bindCallback} selector, but
+	     * Node.js-style error argument will never be passed to that function.
+	     *
+	     * Note that `func` will not be called at the same time output function is,
+	     * but rather whenever resulting Observable is subscribed. By default call to
+	     * `func` will happen synchronously after subscription, but that can be changed
+	     * with proper {@link Scheduler} provided as optional third parameter. Scheduler
+	     * can also control when values from callback will be emitted by Observable.
+	     * To find out more, check out documentation for {@link bindCallback}, where
+	     * Scheduler works exactly the same.
+	     *
+	     * As in {@link bindCallback}, context (`this` property) of input function will be set to context
+	     * of returned function, when it is called.
+	     *
+	     * After Observable emits value, it will complete immediately. This means
+	     * even if `func` calls callback again, values from second and consecutive
+	     * calls will never appear on the stream. If you need to handle functions
+	     * that call callbacks multiple times, check out {@link fromEvent} or
+	     * {@link fromEventPattern} instead.
+	     *
+	     * Note that `bindNodeCallback` can be used in non-Node.js environments as well.
+	     * "Node.js-style" callbacks are just a convention, so if you write for
+	     * browsers or any other environment and API you use implements that callback style,
+	     * `bindNodeCallback` can be safely used on that API functions as well.
+	     *
+	     * Remember that Error object passed to callback does not have to be an instance
+	     * of JavaScript built-in `Error` object. In fact, it does not even have to an object.
+	     * Error parameter of callback function is interpreted as "present", when value
+	     * of that parameter is truthy. It could be, for example, non-zero number, non-empty
+	     * string or boolean `true`. In all of these cases resulting Observable would error
+	     * with that value. This means usually regular style callbacks will fail very often when
+	     * `bindNodeCallback` is used. If your Observable errors much more often then you
+	     * would expect, check if callback really is called in Node.js-style and, if not,
+	     * switch to {@link bindCallback} instead.
+	     *
+	     * Note that even if error parameter is technically present in callback, but its value
+	     * is falsy, it still won't appear in array emitted by Observable or in selector function.
+	     *
 	     *
 	     * @example <caption>Read a file from the filesystem and get the data as an Observable</caption>
 	     * import * as fs from 'fs';
@@ -23271,13 +23511,52 @@
 	     * var result = readFileAsObservable('./roadNames.txt', 'utf8');
 	     * result.subscribe(x => console.log(x), e => console.error(e));
 	     *
+	     *
+	     * @example <caption>Use on function calling callback with multiple arguments</caption>
+	     * someFunction((err, a, b) => {
+	     *   console.log(err); // null
+	     *   console.log(a); // 5
+	     *   console.log(b); // "some string"
+	     * });
+	     * var boundSomeFunction = Rx.Observable.bindNodeCallback(someFunction);
+	     * boundSomeFunction()
+	     * .subscribe(value => {
+	     *   console.log(value); // [5, "some string"]
+	     * });
+	     *
+	     *
+	     * @example <caption>Use with selector function</caption>
+	     * someFunction((err, a, b) => {
+	     *   console.log(err); // undefined
+	     *   console.log(a); // "abc"
+	     *   console.log(b); // "DEF"
+	     * });
+	     * var boundSomeFunction = Rx.Observable.bindNodeCallback(someFunction, (a, b) => a + b);
+	     * boundSomeFunction()
+	     * .subscribe(value => {
+	     *   console.log(value); // "abcDEF"
+	     * });
+	     *
+	     *
+	     * @example <caption>Use on function calling callback in regular style</caption>
+	     * someFunction(a => {
+	     *   console.log(a); // 5
+	     * });
+	     * var boundSomeFunction = Rx.Observable.bindNodeCallback(someFunction);
+	     * boundSomeFunction()
+	     * .subscribe(
+	     *   value => {}             // never gets called
+	     *   err => console.log(err) // 5
+	     *);
+	     *
+	     *
 	     * @see {@link bindCallback}
 	     * @see {@link from}
 	     * @see {@link fromPromise}
 	     *
-	     * @param {function} func Function with a callback as the last parameter.
+	     * @param {function} func Function with a Node.js-style callback as the last parameter.
 	     * @param {function} [selector] A function which takes the arguments from the
-	     * callback and maps those a value to emit on the output Observable.
+	     * callback and maps those to a value to emit on the output Observable.
 	     * @param {Scheduler} [scheduler] The scheduler on which to schedule the
 	     * callbacks.
 	     * @return {function(...params: *): Observable} A function which returns the
@@ -23294,7 +23573,7 @@
 	            for (var _i = 0; _i < arguments.length; _i++) {
 	                args[_i - 0] = arguments[_i];
 	            }
-	            return new BoundNodeCallbackObservable(func, selector, args, scheduler);
+	            return new BoundNodeCallbackObservable(func, selector, args, this, scheduler);
 	        };
 	    };
 	    BoundNodeCallbackObservable.prototype._subscribe = function (subscriber) {
@@ -23327,13 +23606,13 @@
 	                        }
 	                    }
 	                    else {
-	                        subject.next(innerArgs.length === 1 ? innerArgs[0] : innerArgs);
+	                        subject.next(innerArgs.length <= 1 ? innerArgs[0] : innerArgs);
 	                        subject.complete();
 	                    }
 	                };
 	                // use named function instance to avoid closure.
 	                handler.source = this;
-	                var result = tryCatch_1.tryCatch(callbackFunc).apply(this, args.concat(handler));
+	                var result = tryCatch_1.tryCatch(callbackFunc).apply(this.context, args.concat(handler));
 	                if (result === errorObject_1.errorObject) {
 	                    subject.error(errorObject_1.errorObject.e);
 	                }
@@ -23341,7 +23620,7 @@
 	            return subject.subscribe(subscriber);
 	        }
 	        else {
-	            return scheduler.schedule(dispatch, 0, { source: this, subscriber: subscriber });
+	            return scheduler.schedule(dispatch, 0, { source: this, subscriber: subscriber, context: this.context });
 	        }
 	    };
 	    return BoundNodeCallbackObservable;
@@ -23349,7 +23628,7 @@
 	exports.BoundNodeCallbackObservable = BoundNodeCallbackObservable;
 	function dispatch(state) {
 	    var self = this;
-	    var source = state.source, subscriber = state.subscriber;
+	    var source = state.source, subscriber = state.subscriber, context = state.context;
 	    // XXX: cast to `any` to access to the private field in `source`.
 	    var _a = source, callbackFunc = _a.callbackFunc, args = _a.args, scheduler = _a.scheduler;
 	    var subject = source.subject;
@@ -23364,7 +23643,7 @@
 	            var selector = source.selector, subject = source.subject;
 	            var err = innerArgs.shift();
 	            if (err) {
-	                subject.error(err);
+	                self.add(scheduler.schedule(dispatchError, 0, { err: err, subject: subject }));
 	            }
 	            else if (selector) {
 	                var result_2 = tryCatch_1.tryCatch(selector).apply(this, innerArgs);
@@ -23376,15 +23655,15 @@
 	                }
 	            }
 	            else {
-	                var value = innerArgs.length === 1 ? innerArgs[0] : innerArgs;
+	                var value = innerArgs.length <= 1 ? innerArgs[0] : innerArgs;
 	                self.add(scheduler.schedule(dispatchNext, 0, { value: value, subject: subject }));
 	            }
 	        };
 	        // use named function to pass values in without closure
 	        handler.source = source;
-	        var result = tryCatch_1.tryCatch(callbackFunc).apply(this, args.concat(handler));
+	        var result = tryCatch_1.tryCatch(callbackFunc).apply(context, args.concat(handler));
 	        if (result === errorObject_1.errorObject) {
-	            subject.error(errorObject_1.errorObject.e);
+	            self.add(scheduler.schedule(dispatchError, 0, { err: errorObject_1.errorObject.e, subject: subject }));
 	        }
 	    }
 	    self.add(subject.subscribe(subscriber));
@@ -23431,14 +23710,73 @@
 	 * <img src="./img/combineLatest.png" width="100%">
 	 *
 	 * `combineLatest` combines the values from all the Observables passed as
-	 * arguments. This is done by subscribing to each Observable, in order, and
-	 * collecting an array of each of the most recent values any time any of the
-	 * input Observables emits, then either taking that array and passing it as
-	 * arguments to an optional `project` function and emitting the return value of
-	 * that, or just emitting the array of recent values directly if there is no
-	 * `project` function.
+	 * arguments. This is done by subscribing to each Observable in order and,
+	 * whenever any Observable emits, collecting an array of the most recent
+	 * values from each Observable. So if you pass `n` Observables to operator,
+	 * returned Observable will always emit an array of `n` values, in order
+	 * corresponding to order of passed Observables (value from the first Observable
+	 * on the first place and so on).
 	 *
-	 * @example <caption>Dynamically calculate the Body-Mass Index from an Observable of weight and one for height</caption>
+	 * Static version of `combineLatest` accepts either an array of Observables
+	 * or each Observable can be put directly as an argument. Note that array of
+	 * Observables is good choice, if you don't know beforehand how many Observables
+	 * you will combine. Passing empty array will result in Observable that
+	 * completes immediately.
+	 *
+	 * To ensure output array has always the same length, `combineLatest` will
+	 * actually wait for all input Observables to emit at least once,
+	 * before it starts emitting results. This means if some Observable emits
+	 * values before other Observables started emitting, all that values but last
+	 * will be lost. On the other hand, is some Observable does not emit value but
+	 * completes, resulting Observable will complete at the same moment without
+	 * emitting anything, since it will be now impossible to include value from
+	 * completed Observable in resulting array. Also, if some input Observable does
+	 * not emit any value and never completes, `combineLatest` will also never emit
+	 * and never complete, since, again, it will wait for all streams to emit some
+	 * value.
+	 *
+	 * If at least one Observable was passed to `combineLatest` and all passed Observables
+	 * emitted something, resulting Observable will complete when all combined
+	 * streams complete. So even if some Observable completes, result of
+	 * `combineLatest` will still emit values when other Observables do. In case
+	 * of completed Observable, its value from now on will always be the last
+	 * emitted value. On the other hand, if any Observable errors, `combineLatest`
+	 * will error immediately as well, and all other Observables will be unsubscribed.
+	 *
+	 * `combineLatest` accepts as optional parameter `project` function, which takes
+	 * as arguments all values that would normally be emitted by resulting Observable.
+	 * `project` can return any kind of value, which will be then emitted by Observable
+	 * instead of default array. Note that `project` does not take as argument that array
+	 * of values, but values themselves. That means default `project` can be imagined
+	 * as function that takes all its arguments and puts them into an array.
+	 *
+	 *
+	 * @example <caption>Combine two timer Observables</caption>
+	 * const firstTimer = Rx.Observable.timer(0, 1000); // emit 0, 1, 2... after every second, starting from now
+	 * const secondTimer = Rx.Observable.timer(500, 1000); // emit 0, 1, 2... after every second, starting 0,5s from now
+	 * const combinedTimers = Rx.Observable.combineLatest(firstTimer, secondTimer);
+	 * combinedTimers.subscribe(value => console.log(value));
+	 * // Logs
+	 * // [0, 0] after 0.5s
+	 * // [1, 0] after 1s
+	 * // [1, 1] after 1.5s
+	 * // [2, 1] after 2s
+	 *
+	 *
+	 * @example <caption>Combine an array of Observables</caption>
+	 * const observables = [1, 5, 10].map(
+	 *   n => Rx.Observable.of(n).delay(n * 1000).startWith(0) // emit 0 and then emit n after n seconds
+	 * );
+	 * const combined = Rx.Observable.combineLatest(observables);
+	 * combined.subscribe(value => console.log(value));
+	 * // Logs
+	 * // [0, 0, 0] immediately
+	 * // [1, 0, 0] after 1s
+	 * // [1, 5, 0] after 5s
+	 * // [1, 5, 10] after 10s
+	 *
+	 *
+	 * @example <caption>Use project function to dynamically calculate the Body-Mass Index</caption>
 	 * var weight = Rx.Observable.of(70, 72, 76, 79, 75);
 	 * var height = Rx.Observable.of(1.76, 1.77, 1.78);
 	 * var bmi = Rx.Observable.combineLatest(weight, height, (w, h) => w / (h * h));
@@ -23449,17 +23787,18 @@
 	 * // BMI is 23.93948099205209
 	 * // BMI is 23.671253629592222
 	 *
+	 *
 	 * @see {@link combineAll}
 	 * @see {@link merge}
 	 * @see {@link withLatestFrom}
 	 *
-	 * @param {Observable} observable1 An input Observable to combine with the
-	 * source Observable.
-	 * @param {Observable} observable2 An input Observable to combine with the
-	 * source Observable. More than one input Observables may be given as argument.
+	 * @param {ObservableInput} observable1 An input Observable to combine with other Observables.
+	 * @param {ObservableInput} observable2 An input Observable to combine with other Observables.
+	 * More than one input Observables may be given as arguments
+	 * or an array of Observables may be given as the first argument.
 	 * @param {function} [project] An optional function to project the values from
 	 * the combined latest values into a new value on the output Observable.
-	 * @param {Scheduler} [scheduler=null] The Scheduler to use for subscribing to
+	 * @param {Scheduler} [scheduler=null] The IScheduler to use for subscribing to
 	 * each input Observable.
 	 * @return {Observable} An Observable of projected values from the most recent
 	 * values from each input Observable, or an array of the most recent values from
@@ -23547,8 +23886,8 @@
 	     * This static operator is useful for creating a simple Observable that only
 	     * emits the arguments given, and the complete notification thereafter. It can
 	     * be used for composing with other Observables, such as with {@link concat}.
-	     * By default, it uses a `null` Scheduler, which means the `next`
-	     * notifications are sent synchronously, although with a different Scheduler
+	     * By default, it uses a `null` IScheduler, which means the `next`
+	     * notifications are sent synchronously, although with a different IScheduler
 	     * it is possible to determine when those notifications will be delivered.
 	     *
 	     * @example <caption>Emit 10, 20, 30, then 'a', 'b', 'c', then start ticking every second.</caption>
@@ -23564,7 +23903,7 @@
 	     * @see {@link throw}
 	     *
 	     * @param {...T} values Arguments that represent `next` values to be emitted.
-	     * @param {Scheduler} [scheduler] A {@link Scheduler} to use for scheduling
+	     * @param {Scheduler} [scheduler] A {@link IScheduler} to use for scheduling
 	     * the emissions of the `next` notifications.
 	     * @return {Observable<T>} An Observable that emits each given input value.
 	     * @static true
@@ -23749,7 +24088,7 @@
 	     * @see {@link of}
 	     * @see {@link throw}
 	     *
-	     * @param {Scheduler} [scheduler] A {@link Scheduler} to use for scheduling
+	     * @param {Scheduler} [scheduler] A {@link IScheduler} to use for scheduling
 	     * the emission of the complete notification.
 	     * @return {Observable} An "empty" Observable: emits only the complete
 	     * notification.
@@ -23793,7 +24132,7 @@
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
 	var none = {};
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Combines multiple Observables to create an Observable whose values are
 	 * calculated from the latest values of each of its input Observables.
@@ -23827,7 +24166,7 @@
 	 * @see {@link merge}
 	 * @see {@link withLatestFrom}
 	 *
-	 * @param {Observable} other An input Observable to combine with the source
+	 * @param {ObservableInput} other An input Observable to combine with the source
 	 * Observable. More than one input Observables may be given as argument.
 	 * @param {function} [project] An optional function to project the values from
 	 * the combined latest values into a new value on the output Observable.
@@ -23849,7 +24188,7 @@
 	    // if the first and only other argument besides the resultSelector is an array
 	    // assume it's been called with `combineLatest([obs1, obs2, obs3], project)`
 	    if (observables.length === 1 && isArray_1.isArray(observables[0])) {
-	        observables = observables[0];
+	        observables = observables[0].slice();
 	    }
 	    observables.unshift(this);
 	    return this.lift.call(new ArrayObservable_1.ArrayObservable(observables), new CombineLatestOperator(project));
@@ -23976,12 +24315,12 @@
 
 	"use strict";
 	var root_1 = __webpack_require__(182);
-	var isArray_1 = __webpack_require__(187);
-	var isPromise_1 = __webpack_require__(213);
+	var isArrayLike_1 = __webpack_require__(213);
+	var isPromise_1 = __webpack_require__(214);
 	var isObject_1 = __webpack_require__(188);
 	var Observable_1 = __webpack_require__(181);
-	var iterator_1 = __webpack_require__(214);
-	var InnerSubscriber_1 = __webpack_require__(215);
+	var iterator_1 = __webpack_require__(215);
+	var InnerSubscriber_1 = __webpack_require__(216);
 	var observable_1 = __webpack_require__(194);
 	function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
 	    var destination = new InnerSubscriber_1.InnerSubscriber(outerSubscriber, outerValue, outerIndex);
@@ -23998,7 +24337,7 @@
 	            return result.subscribe(destination);
 	        }
 	    }
-	    else if (isArray_1.isArray(result)) {
+	    else if (isArrayLike_1.isArrayLike(result)) {
 	        for (var i = 0, len = result.length; i < len && !destination.closed; i++) {
 	            destination.next(result[i]);
 	        }
@@ -24058,6 +24397,14 @@
 /***/ function(module, exports) {
 
 	"use strict";
+	exports.isArrayLike = (function (x) { return x && typeof x.length === 'number'; });
+	//# sourceMappingURL=isArrayLike.js.map
+
+/***/ },
+/* 214 */
+/***/ function(module, exports) {
+
+	"use strict";
 	function isPromise(value) {
 	    return value && typeof value.subscribe !== 'function' && typeof value.then === 'function';
 	}
@@ -24065,7 +24412,7 @@
 	//# sourceMappingURL=isPromise.js.map
 
 /***/ },
-/* 214 */
+/* 215 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24104,7 +24451,7 @@
 	//# sourceMappingURL=iterator.js.map
 
 /***/ },
-/* 215 */
+/* 216 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24145,22 +24492,13 @@
 	//# sourceMappingURL=InnerSubscriber.js.map
 
 /***/ },
-/* 216 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var concat_1 = __webpack_require__(217);
-	Observable_1.Observable.concat = concat_1.concat;
-	//# sourceMappingURL=concat.js.map
-
-/***/ },
 /* 217 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var Observable_1 = __webpack_require__(181);
 	var concat_1 = __webpack_require__(218);
-	exports.concat = concat_1.concatStatic;
+	Observable_1.Observable.concat = concat_1.concat;
 	//# sourceMappingURL=concat.js.map
 
 /***/ },
@@ -24168,10 +24506,20 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var concat_1 = __webpack_require__(219);
+	exports.concat = concat_1.concatStatic;
+	//# sourceMappingURL=concat.js.map
+
+/***/ },
+/* 219 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Observable_1 = __webpack_require__(181);
 	var isScheduler_1 = __webpack_require__(206);
 	var ArrayObservable_1 = __webpack_require__(207);
-	var mergeAll_1 = __webpack_require__(219);
-	/* tslint:disable:max-line-length */
+	var mergeAll_1 = __webpack_require__(220);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Creates an output Observable which sequentially emits all values from every
 	 * given input Observable after the current Observable.
@@ -24212,9 +24560,9 @@
 	 * @see {@link concatMap}
 	 * @see {@link concatMapTo}
 	 *
-	 * @param {Observable} other An input Observable to concatenate after the source
+	 * @param {ObservableInput} other An input Observable to concatenate after the source
 	 * Observable. More than one input Observables may be given as argument.
-	 * @param {Scheduler} [scheduler=null] An optional Scheduler to schedule each
+	 * @param {Scheduler} [scheduler=null] An optional IScheduler to schedule each
 	 * Observable subscription on.
 	 * @return {Observable} All values of each passed Observable merged into a
 	 * single Observable, in order, in serial fashion.
@@ -24231,17 +24579,41 @@
 	exports.concat = concat;
 	/* tslint:enable:max-line-length */
 	/**
-	 * Creates an output Observable which sequentially emits all values from every
-	 * given input Observable after the current Observable.
+	 * Creates an output Observable which sequentially emits all values from given
+	 * Observable and then moves on to the next.
 	 *
 	 * <span class="informal">Concatenates multiple Observables together by
 	 * sequentially emitting their values, one Observable after the other.</span>
 	 *
 	 * <img src="./img/concat.png" width="100%">
 	 *
-	 * Joins multiple Observables together by subscribing to them one at a time and
-	 * merging their results into the output Observable. Will wait for each
-	 * Observable to complete before moving on to the next.
+	 * `concat` joins multiple Observables together, by subscribing to them one at a time and
+	 * merging their results into the output Observable. You can pass either an array of
+	 * Observables, or put them directly as arguments. Passing an empty array will result
+	 * in Observable that completes immediately.
+	 *
+	 * `concat` will subscribe to first input Observable and emit all its values, without
+	 * changing or affecting them in any way. When that Observable completes, it will
+	 * subscribe to then next Observable passed and, again, emit its values. This will be
+	 * repeated, until the operator runs out of Observables. When last input Observable completes,
+	 * `concat` will complete as well. At any given moment only one Observable passed to operator
+	 * emits values. If you would like to emit values from passed Observables concurrently, check out
+	 * {@link merge} instead, especially with optional `concurrent` parameter. As a matter of fact,
+	 * `concat` is an equivalent of `merge` operator with `concurrent` parameter set to `1`.
+	 *
+	 * Note that if some input Observable never completes, `concat` will also never complete
+	 * and Observables following the one that did not complete will never be subscribed. On the other
+	 * hand, if some Observable simply completes immediately after it is subscribed, it will be
+	 * invisible for `concat`, which will just move on to the next Observable.
+	 *
+	 * If any Observable in chain errors, instead of passing control to the next Observable,
+	 * `concat` will error immediately as well. Observables that would be subscribed after
+	 * the one that emitted error, never will.
+	 *
+	 * If you pass to `concat` the same Observable many times, its stream of values
+	 * will be "replayed" on every subscription, which means you can repeat given Observable
+	 * as many times as you like. If passing the same Observable to `concat` 1000 times becomes tedious,
+	 * you can always use {@link repeat}.
 	 *
 	 * @example <caption>Concatenate a timer counting from 0 to 3 with a synchronous sequence from 1 to 10</caption>
 	 * var timer = Rx.Observable.interval(1000).take(4);
@@ -24252,11 +24624,12 @@
 	 * // results in:
 	 * // 0 -1000ms-> 1 -1000ms-> 2 -1000ms-> 3 -immediate-> 1 ... 10
 	 *
-	 * @example <caption>Concatenate 3 Observables</caption>
+	 *
+	 * @example <caption>Concatenate an array of 3 Observables</caption>
 	 * var timer1 = Rx.Observable.interval(1000).take(10);
 	 * var timer2 = Rx.Observable.interval(2000).take(6);
 	 * var timer3 = Rx.Observable.interval(500).take(10);
-	 * var result = Rx.Observable.concat(timer1, timer2, timer3);
+	 * var result = Rx.Observable.concat([timer1, timer2, timer3]); // note that array is passed
 	 * result.subscribe(x => console.log(x));
 	 *
 	 * // results in the following:
@@ -24265,14 +24638,32 @@
 	 * // -2000ms-> 0 -2000ms-> 1 -2000ms-> ... 5
 	 * // -500ms-> 0 -500ms-> 1 -500ms-> ... 9
 	 *
+	 *
+	 * @example <caption>Concatenate the same Observable to repeat it</caption>
+	 * const timer = Rx.Observable.interval(1000).take(2);
+	 *
+	 * Rx.Observable.concat(timer, timer) // concating the same Observable!
+	 * .subscribe(
+	 *   value => console.log(value),
+	 *   err => {},
+	 *   () => console.log('...and it is done!')
+	 * );
+	 *
+	 * // Logs:
+	 * // 0 after 1s
+	 * // 1 after 2s
+	 * // 0 after 3s
+	 * // 1 after 4s
+	 * // "...and it is done!" also after 4s
+	 *
 	 * @see {@link concatAll}
 	 * @see {@link concatMap}
 	 * @see {@link concatMapTo}
 	 *
-	 * @param {Observable} input1 An input Observable to concatenate with others.
-	 * @param {Observable} input2 An input Observable to concatenate with others.
+	 * @param {ObservableInput} input1 An input Observable to concatenate with others.
+	 * @param {ObservableInput} input2 An input Observable to concatenate with others.
 	 * More than one input Observables may be given as argument.
-	 * @param {Scheduler} [scheduler=null] An optional Scheduler to schedule each
+	 * @param {Scheduler} [scheduler=null] An optional IScheduler to schedule each
 	 * Observable subscription on.
 	 * @return {Observable} All values of each passed Observable merged into a
 	 * single Observable, in order, in serial fashion.
@@ -24290,7 +24681,7 @@
 	    if (isScheduler_1.isScheduler(args[observables.length - 1])) {
 	        scheduler = args.pop();
 	    }
-	    if (scheduler === null && observables.length === 1) {
+	    if (scheduler === null && observables.length === 1 && observables[0] instanceof Observable_1.Observable) {
 	        return observables[0];
 	    }
 	    return new ArrayObservable_1.ArrayObservable(observables, scheduler).lift(new mergeAll_1.MergeAllOperator(1));
@@ -24299,7 +24690,7 @@
 	//# sourceMappingURL=concat.js.map
 
 /***/ },
-/* 219 */
+/* 220 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24415,26 +24806,26 @@
 	//# sourceMappingURL=mergeAll.js.map
 
 /***/ },
-/* 220 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var defer_1 = __webpack_require__(221);
-	Observable_1.Observable.defer = defer_1.defer;
-	//# sourceMappingURL=defer.js.map
-
-/***/ },
 /* 221 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var DeferObservable_1 = __webpack_require__(222);
-	exports.defer = DeferObservable_1.DeferObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var defer_1 = __webpack_require__(222);
+	Observable_1.Observable.defer = defer_1.defer;
 	//# sourceMappingURL=defer.js.map
 
 /***/ },
 /* 222 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var DeferObservable_1 = __webpack_require__(223);
+	exports.defer = DeferObservable_1.DeferObservable.create;
+	//# sourceMappingURL=defer.js.map
+
+/***/ },
+/* 223 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24493,7 +24884,7 @@
 	     *
 	     * @see {@link create}
 	     *
-	     * @param {function(): Observable|Promise} observableFactory The Observable
+	     * @param {function(): SubscribableOrPromise} observableFactory The Observable
 	     * factory function to invoke for each Observer that subscribes to the output
 	     * Observable. May also return a Promise, which will be converted on the fly
 	     * to an Observable.
@@ -24538,17 +24929,17 @@
 	//# sourceMappingURL=DeferObservable.js.map
 
 /***/ },
-/* 223 */
+/* 224 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var empty_1 = __webpack_require__(224);
+	var empty_1 = __webpack_require__(225);
 	Observable_1.Observable.empty = empty_1.empty;
 	//# sourceMappingURL=empty.js.map
 
 /***/ },
-/* 224 */
+/* 225 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24557,26 +24948,26 @@
 	//# sourceMappingURL=empty.js.map
 
 /***/ },
-/* 225 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var forkJoin_1 = __webpack_require__(226);
-	Observable_1.Observable.forkJoin = forkJoin_1.forkJoin;
-	//# sourceMappingURL=forkJoin.js.map
-
-/***/ },
 /* 226 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var ForkJoinObservable_1 = __webpack_require__(227);
-	exports.forkJoin = ForkJoinObservable_1.ForkJoinObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var forkJoin_1 = __webpack_require__(227);
+	Observable_1.Observable.forkJoin = forkJoin_1.forkJoin;
 	//# sourceMappingURL=forkJoin.js.map
 
 /***/ },
 /* 227 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var ForkJoinObservable_1 = __webpack_require__(228);
+	exports.forkJoin = ForkJoinObservable_1.ForkJoinObservable.create;
+	//# sourceMappingURL=forkJoin.js.map
+
+/***/ },
+/* 228 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24693,26 +25084,26 @@
 	//# sourceMappingURL=ForkJoinObservable.js.map
 
 /***/ },
-/* 228 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var from_1 = __webpack_require__(229);
-	Observable_1.Observable.from = from_1.from;
-	//# sourceMappingURL=from.js.map
-
-/***/ },
 /* 229 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var FromObservable_1 = __webpack_require__(230);
-	exports.from = FromObservable_1.FromObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var from_1 = __webpack_require__(230);
+	Observable_1.Observable.from = from_1.from;
 	//# sourceMappingURL=from.js.map
 
 /***/ },
 /* 230 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var FromObservable_1 = __webpack_require__(231);
+	exports.from = FromObservable_1.FromObservable.create;
+	//# sourceMappingURL=from.js.map
+
+/***/ },
+/* 231 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24722,16 +25113,16 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var isArray_1 = __webpack_require__(187);
-	var isPromise_1 = __webpack_require__(213);
-	var PromiseObservable_1 = __webpack_require__(231);
-	var IteratorObservable_1 = __webpack_require__(232);
+	var isArrayLike_1 = __webpack_require__(213);
+	var isPromise_1 = __webpack_require__(214);
+	var PromiseObservable_1 = __webpack_require__(232);
+	var IteratorObservable_1 = __webpack_require__(233);
 	var ArrayObservable_1 = __webpack_require__(207);
-	var ArrayLikeObservable_1 = __webpack_require__(233);
-	var iterator_1 = __webpack_require__(214);
+	var ArrayLikeObservable_1 = __webpack_require__(234);
+	var iterator_1 = __webpack_require__(215);
 	var Observable_1 = __webpack_require__(181);
-	var observeOn_1 = __webpack_require__(234);
+	var observeOn_1 = __webpack_require__(235);
 	var observable_1 = __webpack_require__(194);
-	var isArrayLike = (function (x) { return x && typeof x.length === 'number'; });
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -24817,7 +25208,7 @@
 	            else if (typeof ish[iterator_1.$$iterator] === 'function' || typeof ish === 'string') {
 	                return new IteratorObservable_1.IteratorObservable(ish, scheduler);
 	            }
-	            else if (isArrayLike(ish)) {
+	            else if (isArrayLike_1.isArrayLike(ish)) {
 	                return new ArrayLikeObservable_1.ArrayLikeObservable(ish, scheduler);
 	            }
 	        }
@@ -24839,7 +25230,7 @@
 	//# sourceMappingURL=FromObservable.js.map
 
 /***/ },
-/* 231 */
+/* 232 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24881,7 +25272,7 @@
 	     * @see {@link from}
 	     *
 	     * @param {Promise<T>} promise The promise to be converted.
-	     * @param {Scheduler} [scheduler] An optional Scheduler to use for scheduling
+	     * @param {Scheduler} [scheduler] An optional IScheduler to use for scheduling
 	     * the delivery of the resolved value (or the rejection).
 	     * @return {Observable<T>} An Observable which wraps the Promise.
 	     * @static true
@@ -24965,7 +25356,7 @@
 	//# sourceMappingURL=PromiseObservable.js.map
 
 /***/ },
-/* 232 */
+/* 233 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -24976,7 +25367,7 @@
 	};
 	var root_1 = __webpack_require__(182);
 	var Observable_1 = __webpack_require__(181);
-	var iterator_1 = __webpack_require__(214);
+	var iterator_1 = __webpack_require__(215);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -25133,7 +25524,7 @@
 	//# sourceMappingURL=IteratorObservable.js.map
 
 /***/ },
-/* 233 */
+/* 234 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25208,7 +25599,7 @@
 	//# sourceMappingURL=ArrayLikeObservable.js.map
 
 /***/ },
-/* 234 */
+/* 235 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25218,7 +25609,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var Notification_1 = __webpack_require__(235);
+	var Notification_1 = __webpack_require__(236);
 	/**
 	 * @see {@link Notification}
 	 *
@@ -25261,6 +25652,7 @@
 	    ObserveOnSubscriber.dispatch = function (arg) {
 	        var notification = arg.notification, destination = arg.destination;
 	        notification.observe(destination);
+	        this.unsubscribe();
 	    };
 	    ObserveOnSubscriber.prototype.scheduleMessage = function (notification) {
 	        this.add(this.scheduler.schedule(ObserveOnSubscriber.dispatch, this.delay, new ObserveOnMessage(notification, this.destination)));
@@ -25288,7 +25680,7 @@
 	//# sourceMappingURL=observeOn.js.map
 
 /***/ },
-/* 235 */
+/* 236 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25420,26 +25812,26 @@
 	//# sourceMappingURL=Notification.js.map
 
 /***/ },
-/* 236 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var fromEvent_1 = __webpack_require__(237);
-	Observable_1.Observable.fromEvent = fromEvent_1.fromEvent;
-	//# sourceMappingURL=fromEvent.js.map
-
-/***/ },
 /* 237 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var FromEventObservable_1 = __webpack_require__(238);
-	exports.fromEvent = FromEventObservable_1.FromEventObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var fromEvent_1 = __webpack_require__(238);
+	Observable_1.Observable.fromEvent = fromEvent_1.fromEvent;
 	//# sourceMappingURL=fromEvent.js.map
 
 /***/ },
 /* 238 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var FromEventObservable_1 = __webpack_require__(239);
+	exports.fromEvent = FromEventObservable_1.FromEventObservable.create;
+	//# sourceMappingURL=fromEvent.js.map
+
+/***/ },
+/* 239 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25454,7 +25846,7 @@
 	var errorObject_1 = __webpack_require__(190);
 	var Subscription_1 = __webpack_require__(186);
 	var toString = Object.prototype.toString;
-	function isNodeStyleEventEmmitter(sourceObj) {
+	function isNodeStyleEventEmitter(sourceObj) {
 	    return !!sourceObj && typeof sourceObj.addListener === 'function' && typeof sourceObj.removeListener === 'function';
 	}
 	function isJQueryStyleEventEmitter(sourceObj) {
@@ -25548,7 +25940,7 @@
 	            sourceObj.on(eventName, handler);
 	            unsubscribe = function () { return source_2.off(eventName, handler); };
 	        }
-	        else if (isNodeStyleEventEmmitter(sourceObj)) {
+	        else if (isNodeStyleEventEmitter(sourceObj)) {
 	            var source_3 = sourceObj;
 	            sourceObj.addListener(eventName, handler);
 	            unsubscribe = function () { return source_3.removeListener(eventName, handler); };
@@ -25584,26 +25976,26 @@
 	//# sourceMappingURL=FromEventObservable.js.map
 
 /***/ },
-/* 239 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var fromEventPattern_1 = __webpack_require__(240);
-	Observable_1.Observable.fromEventPattern = fromEventPattern_1.fromEventPattern;
-	//# sourceMappingURL=fromEventPattern.js.map
-
-/***/ },
 /* 240 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var FromEventPatternObservable_1 = __webpack_require__(241);
-	exports.fromEventPattern = FromEventPatternObservable_1.FromEventPatternObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var fromEventPattern_1 = __webpack_require__(241);
+	Observable_1.Observable.fromEventPattern = fromEventPattern_1.fromEventPattern;
 	//# sourceMappingURL=fromEventPattern.js.map
 
 /***/ },
 /* 241 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var FromEventPatternObservable_1 = __webpack_require__(242);
+	exports.fromEventPattern = FromEventPatternObservable_1.FromEventPatternObservable.create;
+	//# sourceMappingURL=fromEventPattern.js.map
+
+/***/ },
+/* 242 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25612,6 +26004,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
+	var isFunction_1 = __webpack_require__(185);
 	var Observable_1 = __webpack_require__(181);
 	var Subscription_1 = __webpack_require__(186);
 	/**
@@ -25663,9 +26056,10 @@
 	     * @param {function(handler: Function): any} addHandler A function that takes
 	     * a `handler` function as argument and attaches it somehow to the actual
 	     * source of events.
-	     * @param {function(handler: Function): void} removeHandler A function that
+	     * @param {function(handler: Function, signal?: any): void} [removeHandler] An optional function that
 	     * takes a `handler` function as argument and removes it in case it was
-	     * previously attached using `addHandler`.
+	     * previously attached using `addHandler`. if addHandler returns signal to teardown when remove,
+	     * removeHandler function will forward it.
 	     * @param {function(...args: any): T} [selector] An optional function to
 	     * post-process results. It takes the arguments from the event handler and
 	     * should return a single value.
@@ -25687,10 +26081,13 @@
 	            }
 	            _this._callSelector(subscriber, args);
 	        } : function (e) { subscriber.next(e); };
-	        this._callAddHandler(handler, subscriber);
+	        var retValue = this._callAddHandler(handler, subscriber);
+	        if (!isFunction_1.isFunction(removeHandler)) {
+	            return;
+	        }
 	        subscriber.add(new Subscription_1.Subscription(function () {
 	            //TODO: determine whether or not to forward to error handler
-	            removeHandler(handler);
+	            removeHandler(handler, retValue);
 	        }));
 	    };
 	    FromEventPatternObservable.prototype._callSelector = function (subscriber, args) {
@@ -25704,7 +26101,7 @@
 	    };
 	    FromEventPatternObservable.prototype._callAddHandler = function (handler, errorSubscriber) {
 	        try {
-	            this.addHandler(handler);
+	            return this.addHandler(handler) || null;
 	        }
 	        catch (e) {
 	            errorSubscriber.error(e);
@@ -25716,22 +26113,13 @@
 	//# sourceMappingURL=FromEventPatternObservable.js.map
 
 /***/ },
-/* 242 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var fromPromise_1 = __webpack_require__(243);
-	Observable_1.Observable.fromPromise = fromPromise_1.fromPromise;
-	//# sourceMappingURL=fromPromise.js.map
-
-/***/ },
 /* 243 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var PromiseObservable_1 = __webpack_require__(231);
-	exports.fromPromise = PromiseObservable_1.PromiseObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var fromPromise_1 = __webpack_require__(244);
+	Observable_1.Observable.fromPromise = fromPromise_1.fromPromise;
 	//# sourceMappingURL=fromPromise.js.map
 
 /***/ },
@@ -25739,13 +26127,22 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var PromiseObservable_1 = __webpack_require__(232);
+	exports.fromPromise = PromiseObservable_1.PromiseObservable.create;
+	//# sourceMappingURL=fromPromise.js.map
+
+/***/ },
+/* 245 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var GenerateObservable_1 = __webpack_require__(245);
+	var GenerateObservable_1 = __webpack_require__(246);
 	Observable_1.Observable.generate = GenerateObservable_1.GenerateObservable.create;
 	//# sourceMappingURL=generate.js.map
 
 /***/ },
-/* 245 */
+/* 246 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25885,26 +26282,26 @@
 	//# sourceMappingURL=GenerateObservable.js.map
 
 /***/ },
-/* 246 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var if_1 = __webpack_require__(247);
-	Observable_1.Observable.if = if_1._if;
-	//# sourceMappingURL=if.js.map
-
-/***/ },
 /* 247 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var IfObservable_1 = __webpack_require__(248);
-	exports._if = IfObservable_1.IfObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var if_1 = __webpack_require__(248);
+	Observable_1.Observable.if = if_1._if;
 	//# sourceMappingURL=if.js.map
 
 /***/ },
 /* 248 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var IfObservable_1 = __webpack_require__(249);
+	exports._if = IfObservable_1.IfObservable.create;
+	//# sourceMappingURL=if.js.map
+
+/***/ },
+/* 249 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25970,26 +26367,26 @@
 	//# sourceMappingURL=IfObservable.js.map
 
 /***/ },
-/* 249 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var interval_1 = __webpack_require__(250);
-	Observable_1.Observable.interval = interval_1.interval;
-	//# sourceMappingURL=interval.js.map
-
-/***/ },
 /* 250 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var IntervalObservable_1 = __webpack_require__(251);
-	exports.interval = IntervalObservable_1.IntervalObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var interval_1 = __webpack_require__(251);
+	Observable_1.Observable.interval = interval_1.interval;
 	//# sourceMappingURL=interval.js.map
 
 /***/ },
 /* 251 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var IntervalObservable_1 = __webpack_require__(252);
+	exports.interval = IntervalObservable_1.IntervalObservable.create;
+	//# sourceMappingURL=interval.js.map
+
+/***/ },
+/* 252 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25998,9 +26395,9 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var isNumeric_1 = __webpack_require__(252);
+	var isNumeric_1 = __webpack_require__(253);
 	var Observable_1 = __webpack_require__(181);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -26023,7 +26420,7 @@
 	    }
 	    /**
 	     * Creates an Observable that emits sequential numbers every specified
-	     * interval of time, on a specified Scheduler.
+	     * interval of time, on a specified IScheduler.
 	     *
 	     * <span class="informal">Emits incremental numbers periodically in time.
 	     * </span>
@@ -26034,8 +26431,8 @@
 	     * ascending integers, with a constant interval of time of your choosing
 	     * between those emissions. The first emission is not sent immediately, but
 	     * only after the first period has passed. By default, this operator uses the
-	     * `async` Scheduler to provide a notion of time, but you may pass any
-	     * Scheduler to it.
+	     * `async` IScheduler to provide a notion of time, but you may pass any
+	     * IScheduler to it.
 	     *
 	     * @example <caption>Emits ascending numbers, one every second (1000ms)</caption>
 	     * var numbers = Rx.Observable.interval(1000);
@@ -26046,7 +26443,7 @@
 	     *
 	     * @param {number} [period=0] The interval size in milliseconds (by default)
 	     * or the time unit determined by the scheduler's clock.
-	     * @param {Scheduler} [scheduler=async] The Scheduler to use for scheduling
+	     * @param {Scheduler} [scheduler=async] The IScheduler to use for scheduling
 	     * the emission of values, and providing a notion of "time".
 	     * @return {Observable} An Observable that emits a sequential number each time
 	     * interval.
@@ -26082,7 +26479,7 @@
 	//# sourceMappingURL=IntervalObservable.js.map
 
 /***/ },
-/* 252 */
+/* 253 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26099,17 +26496,59 @@
 	//# sourceMappingURL=isNumeric.js.map
 
 /***/ },
-/* 253 */
+/* 254 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var AsyncAction_1 = __webpack_require__(254);
-	var AsyncScheduler_1 = __webpack_require__(256);
+	var AsyncAction_1 = __webpack_require__(255);
+	var AsyncScheduler_1 = __webpack_require__(257);
+	/**
+	 *
+	 * Async Scheduler
+	 *
+	 * <span class="informal">Schedule task as if you used setTimeout(task, duration)</span>
+	 *
+	 * `async` scheduler schedules tasks asynchronously, by putting them on the JavaScript
+	 * event loop queue. It is best used to delay tasks in time or to schedule tasks repeating
+	 * in intervals.
+	 *
+	 * If you just want to "defer" task, that is to perform it right after currently
+	 * executing synchronous code ends (commonly achieved by `setTimeout(deferredTask, 0)`),
+	 * better choice will be the {@link asap} scheduler.
+	 *
+	 * @example <caption>Use async scheduler to delay task</caption>
+	 * const task = () => console.log('it works!');
+	 *
+	 * Rx.Scheduler.async.schedule(task, 2000);
+	 *
+	 * // After 2 seconds logs:
+	 * // "it works!"
+	 *
+	 *
+	 * @example <caption>Use async scheduler to repeat task in intervals</caption>
+	 * function task(state) {
+	 *   console.log(state);
+	 *   this.schedule(state + 1, 1000); // `this` references currently executing Action,
+	 *                                   // which we reschedule with new state and delay
+	 * }
+	 *
+	 * Rx.Scheduler.async.schedule(task, 3000, 0);
+	 *
+	 * // Logs:
+	 * // 0 after 3s
+	 * // 1 after 4s
+	 * // 2 after 5s
+	 * // 3 after 6s
+	 *
+	 * @static true
+	 * @name async
+	 * @owner Scheduler
+	 */
 	exports.async = new AsyncScheduler_1.AsyncScheduler(AsyncAction_1.AsyncAction);
 	//# sourceMappingURL=async.js.map
 
 /***/ },
-/* 254 */
+/* 255 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26119,7 +26558,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var root_1 = __webpack_require__(182);
-	var Action_1 = __webpack_require__(255);
+	var Action_1 = __webpack_require__(256);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -26256,7 +26695,7 @@
 	//# sourceMappingURL=AsyncAction.js.map
 
 /***/ },
-/* 255 */
+/* 256 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26305,7 +26744,7 @@
 	//# sourceMappingURL=Action.js.map
 
 /***/ },
-/* 256 */
+/* 257 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26314,7 +26753,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var Scheduler_1 = __webpack_require__(257);
+	var Scheduler_1 = __webpack_require__(258);
 	var AsyncScheduler = (function (_super) {
 	    __extends(AsyncScheduler, _super);
 	    function AsyncScheduler() {
@@ -26361,7 +26800,7 @@
 	//# sourceMappingURL=AsyncScheduler.js.map
 
 /***/ },
-/* 257 */
+/* 258 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -26415,22 +26854,13 @@
 	//# sourceMappingURL=Scheduler.js.map
 
 /***/ },
-/* 258 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var merge_1 = __webpack_require__(259);
-	Observable_1.Observable.merge = merge_1.merge;
-	//# sourceMappingURL=merge.js.map
-
-/***/ },
 /* 259 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var Observable_1 = __webpack_require__(181);
 	var merge_1 = __webpack_require__(260);
-	exports.merge = merge_1.mergeStatic;
+	Observable_1.Observable.merge = merge_1.merge;
 	//# sourceMappingURL=merge.js.map
 
 /***/ },
@@ -26438,10 +26868,20 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var merge_1 = __webpack_require__(261);
+	exports.merge = merge_1.mergeStatic;
+	//# sourceMappingURL=merge.js.map
+
+/***/ },
+/* 261 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Observable_1 = __webpack_require__(181);
 	var ArrayObservable_1 = __webpack_require__(207);
-	var mergeAll_1 = __webpack_require__(219);
+	var mergeAll_1 = __webpack_require__(220);
 	var isScheduler_1 = __webpack_require__(206);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Creates an output Observable which concurrently emits all values from every
 	 * given input Observable.
@@ -26477,13 +26917,13 @@
 	 * @see {@link mergeMapTo}
 	 * @see {@link mergeScan}
 	 *
-	 * @param {Observable} other An input Observable to merge with the source
+	 * @param {ObservableInput} other An input Observable to merge with the source
 	 * Observable. More than one input Observables may be given as argument.
 	 * @param {number} [concurrent=Number.POSITIVE_INFINITY] Maximum number of input
 	 * Observables being subscribed to concurrently.
-	 * @param {Scheduler} [scheduler=null] The Scheduler to use for managing
+	 * @param {Scheduler} [scheduler=null] The IScheduler to use for managing
 	 * concurrency of input Observables.
-	 * @return {Observable} an Observable that emits items that are the result of
+	 * @return {Observable} An Observable that emits items that are the result of
 	 * every input Observable.
 	 * @method merge
 	 * @owner Observable
@@ -26546,10 +26986,10 @@
 	 * @see {@link mergeMapTo}
 	 * @see {@link mergeScan}
 	 *
-	 * @param {...Observable} observables Input Observables to merge together.
+	 * @param {...ObservableInput} observables Input Observables to merge together.
 	 * @param {number} [concurrent=Number.POSITIVE_INFINITY] Maximum number of input
 	 * Observables being subscribed to concurrently.
-	 * @param {Scheduler} [scheduler=null] The Scheduler to use for managing
+	 * @param {Scheduler} [scheduler=null] The IScheduler to use for managing
 	 * concurrency of input Observables.
 	 * @return {Observable} an Observable that emits items that are the result of
 	 * every input Observable.
@@ -26574,7 +27014,7 @@
 	    else if (typeof last === 'number') {
 	        concurrent = observables.pop();
 	    }
-	    if (scheduler === null && observables.length === 1) {
+	    if (scheduler === null && observables.length === 1 && observables[0] instanceof Observable_1.Observable) {
 	        return observables[0];
 	    }
 	    return new ArrayObservable_1.ArrayObservable(observables, scheduler).lift(new mergeAll_1.MergeAllOperator(concurrent));
@@ -26583,17 +27023,17 @@
 	//# sourceMappingURL=merge.js.map
 
 /***/ },
-/* 261 */
+/* 262 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var race_1 = __webpack_require__(262);
+	var race_1 = __webpack_require__(263);
 	Observable_1.Observable.race = race_1.raceStatic;
 	//# sourceMappingURL=race.js.map
 
 /***/ },
-/* 262 */
+/* 263 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26606,12 +27046,12 @@
 	var ArrayObservable_1 = __webpack_require__(207);
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Returns an Observable that mirrors the first source Observable to emit an item
-	 * from the combination of this Observable and supplied Observables
-	 * @param {...Observables} ...observables sources used to race for which Observable emits first.
-	 * @return {Observable} an Observable that mirrors the output of the first Observable to emit an item.
+	 * from the combination of this Observable and supplied Observables.
+	 * @param {...Observables} ...observables Sources used to race for which Observable emits first.
+	 * @return {Observable} An Observable that mirrors the output of the first Observable to emit an item.
 	 * @method race
 	 * @owner Observable
 	 */
@@ -26709,26 +27149,26 @@
 	//# sourceMappingURL=race.js.map
 
 /***/ },
-/* 263 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var never_1 = __webpack_require__(264);
-	Observable_1.Observable.never = never_1.never;
-	//# sourceMappingURL=never.js.map
-
-/***/ },
 /* 264 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var NeverObservable_1 = __webpack_require__(265);
-	exports.never = NeverObservable_1.NeverObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var never_1 = __webpack_require__(265);
+	Observable_1.Observable.never = never_1.never;
 	//# sourceMappingURL=never.js.map
 
 /***/ },
 /* 265 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var NeverObservable_1 = __webpack_require__(266);
+	exports.never = NeverObservable_1.NeverObservable.create;
+	//# sourceMappingURL=never.js.map
+
+/***/ },
+/* 266 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26738,7 +27178,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Observable_1 = __webpack_require__(181);
-	var noop_1 = __webpack_require__(266);
+	var noop_1 = __webpack_require__(267);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -26792,7 +27232,7 @@
 	//# sourceMappingURL=NeverObservable.js.map
 
 /***/ },
-/* 266 */
+/* 267 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -26802,17 +27242,17 @@
 	//# sourceMappingURL=noop.js.map
 
 /***/ },
-/* 267 */
+/* 268 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var of_1 = __webpack_require__(268);
+	var of_1 = __webpack_require__(269);
 	Observable_1.Observable.of = of_1.of;
 	//# sourceMappingURL=of.js.map
 
 /***/ },
-/* 268 */
+/* 269 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26821,17 +27261,17 @@
 	//# sourceMappingURL=of.js.map
 
 /***/ },
-/* 269 */
+/* 270 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var onErrorResumeNext_1 = __webpack_require__(270);
+	var onErrorResumeNext_1 = __webpack_require__(271);
 	Observable_1.Observable.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNextStatic;
 	//# sourceMappingURL=onErrorResumeNext.js.map
 
 /***/ },
-/* 270 */
+/* 271 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26840,11 +27280,11 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var FromObservable_1 = __webpack_require__(230);
+	var FromObservable_1 = __webpack_require__(231);
 	var isArray_1 = __webpack_require__(187);
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	function onErrorResumeNext() {
 	    var nextSources = [];
 	    for (var _i = 0; _i < arguments.length; _i++) {
@@ -26912,26 +27352,26 @@
 	//# sourceMappingURL=onErrorResumeNext.js.map
 
 /***/ },
-/* 271 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var pairs_1 = __webpack_require__(272);
-	Observable_1.Observable.pairs = pairs_1.pairs;
-	//# sourceMappingURL=pairs.js.map
-
-/***/ },
 /* 272 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var PairsObservable_1 = __webpack_require__(273);
-	exports.pairs = PairsObservable_1.PairsObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var pairs_1 = __webpack_require__(273);
+	Observable_1.Observable.pairs = pairs_1.pairs;
 	//# sourceMappingURL=pairs.js.map
 
 /***/ },
 /* 273 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var PairsObservable_1 = __webpack_require__(274);
+	exports.pairs = PairsObservable_1.PairsObservable.create;
+	//# sourceMappingURL=pairs.js.map
+
+/***/ },
+/* 274 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -26967,7 +27407,7 @@
 	    }
 	    /**
 	     * Convert an object into an observable sequence of [key, value] pairs
-	     * using an optional Scheduler to enumerate the object.
+	     * using an optional IScheduler to enumerate the object.
 	     *
 	     * @example <caption>Converts a javascript object to an Observable</caption>
 	     * var obj = {
@@ -26991,7 +27431,7 @@
 	     *
 	     * @param {Object} obj The object to inspect and turn into an
 	     * Observable sequence.
-	     * @param {Scheduler} [scheduler] An optional Scheduler to run the
+	     * @param {Scheduler} [scheduler] An optional IScheduler to run the
 	     * enumeration of the input sequence on.
 	     * @returns {(Observable<Array<string | T>>)} An observable sequence of
 	     * [key, value] pairs from the object.
@@ -27021,26 +27461,26 @@
 	//# sourceMappingURL=PairsObservable.js.map
 
 /***/ },
-/* 274 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var range_1 = __webpack_require__(275);
-	Observable_1.Observable.range = range_1.range;
-	//# sourceMappingURL=range.js.map
-
-/***/ },
 /* 275 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var RangeObservable_1 = __webpack_require__(276);
-	exports.range = RangeObservable_1.RangeObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var range_1 = __webpack_require__(276);
+	Observable_1.Observable.range = range_1.range;
 	//# sourceMappingURL=range.js.map
 
 /***/ },
 /* 276 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var RangeObservable_1 = __webpack_require__(277);
+	exports.range = RangeObservable_1.RangeObservable.create;
+	//# sourceMappingURL=range.js.map
+
+/***/ },
+/* 277 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -27073,8 +27513,8 @@
 	     *
 	     * `range` operator emits a range of sequential integers, in order, where you
 	     * select the `start` of the range and its `length`. By default, uses no
-	     * Scheduler and just delivers the notifications synchronously, but may use
-	     * an optional Scheduler to regulate those deliveries.
+	     * IScheduler and just delivers the notifications synchronously, but may use
+	     * an optional IScheduler to regulate those deliveries.
 	     *
 	     * @example <caption>Emits the numbers 1 to 10</caption>
 	     * var numbers = Rx.Observable.range(1, 10);
@@ -27085,7 +27525,7 @@
 	     *
 	     * @param {number} [start=0] The value of the first integer in the sequence.
 	     * @param {number} [count=0] The number of sequential integers to generate.
-	     * @param {Scheduler} [scheduler] A {@link Scheduler} to use for scheduling
+	     * @param {Scheduler} [scheduler] A {@link IScheduler} to use for scheduling
 	     * the emissions of the notifications.
 	     * @return {Observable} An Observable of numbers that emits a finite range of
 	     * sequential integers.
@@ -27141,26 +27581,26 @@
 	//# sourceMappingURL=RangeObservable.js.map
 
 /***/ },
-/* 277 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var using_1 = __webpack_require__(278);
-	Observable_1.Observable.using = using_1.using;
-	//# sourceMappingURL=using.js.map
-
-/***/ },
 /* 278 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var UsingObservable_1 = __webpack_require__(279);
-	exports.using = UsingObservable_1.UsingObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var using_1 = __webpack_require__(279);
+	Observable_1.Observable.using = using_1.using;
 	//# sourceMappingURL=using.js.map
 
 /***/ },
 /* 279 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var UsingObservable_1 = __webpack_require__(280);
+	exports.using = UsingObservable_1.UsingObservable.create;
+	//# sourceMappingURL=using.js.map
+
+/***/ },
+/* 280 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -27226,26 +27666,26 @@
 	//# sourceMappingURL=UsingObservable.js.map
 
 /***/ },
-/* 280 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var throw_1 = __webpack_require__(281);
-	Observable_1.Observable.throw = throw_1._throw;
-	//# sourceMappingURL=throw.js.map
-
-/***/ },
 /* 281 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var ErrorObservable_1 = __webpack_require__(282);
-	exports._throw = ErrorObservable_1.ErrorObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var throw_1 = __webpack_require__(282);
+	Observable_1.Observable.throw = throw_1._throw;
 	//# sourceMappingURL=throw.js.map
 
 /***/ },
 /* 282 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var ErrorObservable_1 = __webpack_require__(283);
+	exports._throw = ErrorObservable_1.ErrorObservable.create;
+	//# sourceMappingURL=throw.js.map
+
+/***/ },
+/* 283 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -27284,7 +27724,7 @@
 	     * var result = Rx.Observable.throw(new Error('oops!')).startWith(7);
 	     * result.subscribe(x => console.log(x), e => console.error(e));
 	     *
-	     * @example <caption>Map and flattens numbers to the sequence 'a', 'b', 'c', but throw an error for 13</caption>
+	     * @example <caption>Map and flatten numbers to the sequence 'a', 'b', 'c', but throw an error for 13</caption>
 	     * var interval = Rx.Observable.interval(1000);
 	     * var result = interval.mergeMap(x =>
 	     *   x === 13 ?
@@ -27299,7 +27739,7 @@
 	     * @see {@link of}
 	     *
 	     * @param {any} error The particular Error to pass to the error notification.
-	     * @param {Scheduler} [scheduler] A {@link Scheduler} to use for scheduling
+	     * @param {Scheduler} [scheduler] A {@link IScheduler} to use for scheduling
 	     * the emission of the error notification.
 	     * @return {Observable} An error Observable: emits only the error notification
 	     * using the given error argument.
@@ -27332,26 +27772,26 @@
 	//# sourceMappingURL=ErrorObservable.js.map
 
 /***/ },
-/* 283 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var timer_1 = __webpack_require__(284);
-	Observable_1.Observable.timer = timer_1.timer;
-	//# sourceMappingURL=timer.js.map
-
-/***/ },
 /* 284 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var TimerObservable_1 = __webpack_require__(285);
-	exports.timer = TimerObservable_1.TimerObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var timer_1 = __webpack_require__(285);
+	Observable_1.Observable.timer = timer_1.timer;
 	//# sourceMappingURL=timer.js.map
 
 /***/ },
 /* 285 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var TimerObservable_1 = __webpack_require__(286);
+	exports.timer = TimerObservable_1.TimerObservable.create;
+	//# sourceMappingURL=timer.js.map
+
+/***/ },
+/* 286 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -27360,11 +27800,11 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var isNumeric_1 = __webpack_require__(252);
+	var isNumeric_1 = __webpack_require__(253);
 	var Observable_1 = __webpack_require__(181);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	var isScheduler_1 = __webpack_require__(206);
-	var isDate_1 = __webpack_require__(286);
+	var isDate_1 = __webpack_require__(287);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -27404,8 +27844,8 @@
 	     * integers, with a constant interval of time, `period` of your choosing
 	     * between those emissions. The first emission happens after the specified
 	     * `initialDelay`. The initial delay may be a {@link Date}. By default, this
-	     * operator uses the `async` Scheduler to provide a notion of time, but you
-	     * may pass any Scheduler to it. If `period` is not specified, the output
+	     * operator uses the `async` IScheduler to provide a notion of time, but you
+	     * may pass any IScheduler to it. If `period` is not specified, the output
 	     * Observable emits only one value, `0`. Otherwise, it emits an infinite
 	     * sequence.
 	     *
@@ -27424,7 +27864,7 @@
 	     * emitting the first value of `0`.
 	     * @param {number} [period] The period of time between emissions of the
 	     * subsequent numbers.
-	     * @param {Scheduler} [scheduler=async] The Scheduler to use for scheduling
+	     * @param {Scheduler} [scheduler=async] The IScheduler to use for scheduling
 	     * the emission of values, and providing a notion of "time".
 	     * @return {Observable} An Observable that emits a `0` after the
 	     * `initialDelay` and ever increasing numbers after each `period` of time
@@ -27463,7 +27903,7 @@
 	//# sourceMappingURL=TimerObservable.js.map
 
 /***/ },
-/* 286 */
+/* 287 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -27474,26 +27914,26 @@
 	//# sourceMappingURL=isDate.js.map
 
 /***/ },
-/* 287 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var zip_1 = __webpack_require__(288);
-	Observable_1.Observable.zip = zip_1.zip;
-	//# sourceMappingURL=zip.js.map
-
-/***/ },
 /* 288 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var Observable_1 = __webpack_require__(181);
 	var zip_1 = __webpack_require__(289);
-	exports.zip = zip_1.zipStatic;
+	Observable_1.Observable.zip = zip_1.zip;
 	//# sourceMappingURL=zip.js.map
 
 /***/ },
 /* 289 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var zip_1 = __webpack_require__(290);
+	exports.zip = zip_1.zipStatic;
+	//# sourceMappingURL=zip.js.map
+
+/***/ },
+/* 290 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -27507,8 +27947,8 @@
 	var Subscriber_1 = __webpack_require__(184);
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	var iterator_1 = __webpack_require__(214);
-	/* tslint:disable:max-line-length */
+	var iterator_1 = __webpack_require__(215);
+	/* tslint:enable:max-line-length */
 	/**
 	 * @param observables
 	 * @return {Observable<R>}
@@ -27525,6 +27965,30 @@
 	exports.zipProto = zipProto;
 	/* tslint:enable:max-line-length */
 	/**
+	 * Combines multiple Observables to create an Observable whose values are calculated from the values, in order, of each
+	 * of its input Observables.
+	 *
+	 * If the latest parameter is a function, this function is used to compute the created value from the input values.
+	 * Otherwise, an array of the input values is returned.
+	 *
+	 * @example <caption>Combine age and name from different sources</caption>
+	 *
+	 * let age$ = Observable.of<number>(27, 25, 29);
+	 * let name$ = Observable.of<string>('Foo', 'Bar', 'Beer');
+	 * let isDev$ = Observable.of<boolean>(true, true, false);
+	 *
+	 * Observable
+	 *     .zip(age$,
+	 *          name$,
+	 *          isDev$,
+	 *          (age: number, name: string, isDev: boolean) => ({ age, name, isDev }))
+	 *     .subscribe(x => console.log(x));
+	 *
+	 * // outputs
+	 * // { age: 27, name: 'Foo', isDev: true }
+	 * // { age: 25, name: 'Bar', isDev: true }
+	 * // { age: 29, name: 'Beer', isDev: false }
+	 *
 	 * @param observables
 	 * @return {Observable<R>}
 	 * @static true
@@ -27749,26 +28213,26 @@
 	//# sourceMappingURL=zip.js.map
 
 /***/ },
-/* 290 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var ajax_1 = __webpack_require__(291);
-	Observable_1.Observable.ajax = ajax_1.ajax;
-	//# sourceMappingURL=ajax.js.map
-
-/***/ },
 /* 291 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var AjaxObservable_1 = __webpack_require__(292);
-	exports.ajax = AjaxObservable_1.AjaxObservable.create;
+	var Observable_1 = __webpack_require__(181);
+	var ajax_1 = __webpack_require__(292);
+	Observable_1.Observable.ajax = ajax_1.ajax;
 	//# sourceMappingURL=ajax.js.map
 
 /***/ },
 /* 292 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var AjaxObservable_1 = __webpack_require__(293);
+	exports.ajax = AjaxObservable_1.AjaxObservable.create;
+	//# sourceMappingURL=ajax.js.map
+
+/***/ },
+/* 293 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -27782,14 +28246,10 @@
 	var errorObject_1 = __webpack_require__(190);
 	var Observable_1 = __webpack_require__(181);
 	var Subscriber_1 = __webpack_require__(184);
-	var map_1 = __webpack_require__(293);
+	var map_1 = __webpack_require__(294);
 	function getCORSRequest() {
 	    if (root_1.root.XMLHttpRequest) {
-	        var xhr = new root_1.root.XMLHttpRequest();
-	        if ('withCredentials' in xhr) {
-	            xhr.withCredentials = !!this.withCredentials;
-	        }
-	        return xhr;
+	        return new root_1.root.XMLHttpRequest();
 	    }
 	    else if (!!root_1.root.XDomainRequest) {
 	        return new root_1.root.XDomainRequest();
@@ -27843,6 +28303,11 @@
 	    return new AjaxObservable({ method: 'PUT', url: url, body: body, headers: headers });
 	}
 	exports.ajaxPut = ajaxPut;
+	;
+	function ajaxPatch(url, body, headers) {
+	    return new AjaxObservable({ method: 'PATCH', url: url, body: body, headers: headers });
+	}
+	exports.ajaxPatch = ajaxPatch;
 	;
 	function ajaxGetJSON(url, headers) {
 	    return new AjaxObservable({ method: 'GET', url: url, responseType: 'json', headers: headers })
@@ -27920,6 +28385,7 @@
 	        create.post = ajaxPost;
 	        create.delete = ajaxDelete;
 	        create.put = ajaxPut;
+	        create.patch = ajaxPatch;
 	        create.getJSON = ajaxGetJSON;
 	        return create;
 	    })();
@@ -27982,9 +28448,12 @@
 	                this.error(errorObject_1.errorObject.e);
 	                return null;
 	            }
-	            // timeout and responseType can be set once the XHR is open
+	            // timeout, responseType and withCredentials can be set once the XHR is open
 	            xhr.timeout = request.timeout;
 	            xhr.responseType = request.responseType;
+	            if ('withCredentials' in xhr) {
+	                xhr.withCredentials = !!request.withCredentials;
+	            }
 	            // set headers
 	            this.setHeaders(xhr, headers);
 	            // finally send the request
@@ -28181,7 +28650,7 @@
 	//# sourceMappingURL=AjaxObservable.js.map
 
 /***/ },
-/* 293 */
+/* 294 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28273,26 +28742,26 @@
 	//# sourceMappingURL=map.js.map
 
 /***/ },
-/* 294 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var webSocket_1 = __webpack_require__(295);
-	Observable_1.Observable.webSocket = webSocket_1.webSocket;
-	//# sourceMappingURL=webSocket.js.map
-
-/***/ },
 /* 295 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var WebSocketSubject_1 = __webpack_require__(296);
-	exports.webSocket = WebSocketSubject_1.WebSocketSubject.create;
+	var Observable_1 = __webpack_require__(181);
+	var webSocket_1 = __webpack_require__(296);
+	Observable_1.Observable.webSocket = webSocket_1.webSocket;
 	//# sourceMappingURL=webSocket.js.map
 
 /***/ },
 /* 296 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var WebSocketSubject_1 = __webpack_require__(297);
+	exports.webSocket = WebSocketSubject_1.WebSocketSubject.create;
+	//# sourceMappingURL=webSocket.js.map
+
+/***/ },
+/* 297 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28306,10 +28775,10 @@
 	var Observable_1 = __webpack_require__(181);
 	var Subscription_1 = __webpack_require__(186);
 	var root_1 = __webpack_require__(182);
-	var ReplaySubject_1 = __webpack_require__(297);
+	var ReplaySubject_1 = __webpack_require__(298);
 	var tryCatch_1 = __webpack_require__(189);
 	var errorObject_1 = __webpack_require__(190);
-	var assign_1 = __webpack_require__(301);
+	var assign_1 = __webpack_require__(302);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -28342,7 +28811,36 @@
 	        return JSON.parse(e.data);
 	    };
 	    /**
-	     * @param urlConfigOrSource
+	     * Wrapper around the w3c-compatible WebSocket object provided by the browser.
+	     *
+	     * @example <caption>Wraps browser WebSocket</caption>
+	     *
+	     * let subject = Observable.webSocket('ws://localhost:8081');
+	     * subject.subscribe(
+	     *    (msg) => console.log('message received: ' + msg),
+	     *    (err) => console.log(err),
+	     *    () => console.log('complete')
+	     *  );
+	     * subject.next(JSON.stringify({ op: 'hello' }));
+	     *
+	     * @example <caption>Wraps WebSocket from nodejs-websocket (using node.js)</caption>
+	     *
+	     * import { w3cwebsocket } from 'websocket';
+	     *
+	     * let socket = new WebSocketSubject({
+	     *   url: 'ws://localhost:8081',
+	     *   WebSocketCtor: w3cwebsocket
+	     * });
+	     *
+	     * let subject = Observable.webSocket('ws://localhost:8081');
+	     * subject.subscribe(
+	     *    (msg) => console.log('message received: ' + msg),
+	     *    (err) => console.log(err),
+	     *    () => console.log('complete')
+	     *  );
+	     * subject.next(JSON.stringify({ op: 'hello' }));
+	     *
+	     * @param {string | WebSocketSubjectConfig} urlConfigOrSource the source of the websocket as an url or a structure defining the websocket object
 	     * @return {WebSocketSubject}
 	     * @static true
 	     * @name webSocket
@@ -28405,6 +28903,9 @@
 	                new WebSocketCtor(this.url, this.protocol) :
 	                new WebSocketCtor(this.url);
 	            this.socket = socket;
+	            if (this.binaryType) {
+	                this.socket.binaryType = this.binaryType;
+	            }
 	        }
 	        catch (e) {
 	            observer.error(e);
@@ -28513,7 +29014,7 @@
 	//# sourceMappingURL=WebSocketSubject.js.map
 
 /***/ },
-/* 297 */
+/* 298 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28523,9 +29024,9 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subject_1 = __webpack_require__(180);
-	var queue_1 = __webpack_require__(298);
+	var queue_1 = __webpack_require__(299);
 	var Subscription_1 = __webpack_require__(186);
-	var observeOn_1 = __webpack_require__(234);
+	var observeOn_1 = __webpack_require__(235);
 	var ObjectUnsubscribedError_1 = __webpack_require__(195);
 	var SubjectSubscription_1 = __webpack_require__(196);
 	/**
@@ -28620,17 +29121,78 @@
 	//# sourceMappingURL=ReplaySubject.js.map
 
 /***/ },
-/* 298 */
+/* 299 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var QueueAction_1 = __webpack_require__(299);
-	var QueueScheduler_1 = __webpack_require__(300);
+	var QueueAction_1 = __webpack_require__(300);
+	var QueueScheduler_1 = __webpack_require__(301);
+	/**
+	 *
+	 * Queue Scheduler
+	 *
+	 * <span class="informal">Put every next task on a queue, instead of executing it immediately</span>
+	 *
+	 * `queue` scheduler, when used with delay, behaves the same as {@link async} scheduler.
+	 *
+	 * When used without delay, it schedules given task synchronously - executes it right when
+	 * it is scheduled. However when called recursively, that is when inside the scheduled task,
+	 * another task is scheduled with queue scheduler, instead of executing immediately as well,
+	 * that task will be put on a queue and wait for current one to finish.
+	 *
+	 * This means that when you execute task with `queue` scheduler, you are sure it will end
+	 * before any other task scheduled with that scheduler will start.
+	 *
+	 * @examples <caption>Schedule recursively first, then do something</caption>
+	 *
+	 * Rx.Scheduler.queue.schedule(() => {
+	 *   Rx.Scheduler.queue.schedule(() => console.log('second')); // will not happen now, but will be put on a queue
+	 *
+	 *   console.log('first');
+	 * });
+	 *
+	 * // Logs:
+	 * // "first"
+	 * // "second"
+	 *
+	 *
+	 * @example <caption>Reschedule itself recursively</caption>
+	 *
+	 * Rx.Scheduler.queue.schedule(function(state) {
+	 *   if (state !== 0) {
+	 *     console.log('before', state);
+	 *     this.schedule(state - 1); // `this` references currently executing Action,
+	 *                               // which we reschedule with new state
+	 *     console.log('after', state);
+	 *   }
+	 * }, 0, 3);
+	 *
+	 * // In scheduler that runs recursively, you would expect:
+	 * // "before", 3
+	 * // "before", 2
+	 * // "before", 1
+	 * // "after", 1
+	 * // "after", 2
+	 * // "after", 3
+	 *
+	 * // But with queue it logs:
+	 * // "before", 3
+	 * // "after", 3
+	 * // "before", 2
+	 * // "after", 2
+	 * // "before", 1
+	 * // "after", 1
+	 *
+	 *
+	 * @static true
+	 * @name queue
+	 * @owner Scheduler
+	 */
 	exports.queue = new QueueScheduler_1.QueueScheduler(QueueAction_1.QueueAction);
 	//# sourceMappingURL=queue.js.map
 
 /***/ },
-/* 299 */
+/* 300 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28639,7 +29201,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var AsyncAction_1 = __webpack_require__(254);
+	var AsyncAction_1 = __webpack_require__(255);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -28684,7 +29246,7 @@
 	//# sourceMappingURL=QueueAction.js.map
 
 /***/ },
-/* 300 */
+/* 301 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28693,7 +29255,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var AsyncScheduler_1 = __webpack_require__(256);
+	var AsyncScheduler_1 = __webpack_require__(257);
 	var QueueScheduler = (function (_super) {
 	    __extends(QueueScheduler, _super);
 	    function QueueScheduler() {
@@ -28705,7 +29267,7 @@
 	//# sourceMappingURL=QueueScheduler.js.map
 
 /***/ },
-/* 301 */
+/* 302 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28736,17 +29298,17 @@
 	//# sourceMappingURL=assign.js.map
 
 /***/ },
-/* 302 */
+/* 303 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var buffer_1 = __webpack_require__(303);
+	var buffer_1 = __webpack_require__(304);
 	Observable_1.Observable.prototype.buffer = buffer_1.buffer;
 	//# sourceMappingURL=buffer.js.map
 
 /***/ },
-/* 303 */
+/* 304 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28827,17 +29389,17 @@
 	//# sourceMappingURL=buffer.js.map
 
 /***/ },
-/* 304 */
+/* 305 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var bufferCount_1 = __webpack_require__(305);
+	var bufferCount_1 = __webpack_require__(306);
 	Observable_1.Observable.prototype.bufferCount = bufferCount_1.bufferCount;
 	//# sourceMappingURL=bufferCount.js.map
 
 /***/ },
-/* 305 */
+/* 306 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28949,17 +29511,17 @@
 	//# sourceMappingURL=bufferCount.js.map
 
 /***/ },
-/* 306 */
+/* 307 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var bufferTime_1 = __webpack_require__(307);
+	var bufferTime_1 = __webpack_require__(308);
 	Observable_1.Observable.prototype.bufferTime = bufferTime_1.bufferTime;
 	//# sourceMappingURL=bufferTime.js.map
 
 /***/ },
-/* 307 */
+/* 308 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -28968,10 +29530,10 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	var Subscriber_1 = __webpack_require__(184);
 	var isScheduler_1 = __webpack_require__(206);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Buffers the source Observable values for a specific time period.
 	 *
@@ -29163,17 +29725,17 @@
 	//# sourceMappingURL=bufferTime.js.map
 
 /***/ },
-/* 308 */
+/* 309 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var bufferToggle_1 = __webpack_require__(309);
+	var bufferToggle_1 = __webpack_require__(310);
 	Observable_1.Observable.prototype.bufferToggle = bufferToggle_1.bufferToggle;
 	//# sourceMappingURL=bufferToggle.js.map
 
 /***/ },
-/* 309 */
+/* 310 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -29330,17 +29892,17 @@
 	//# sourceMappingURL=bufferToggle.js.map
 
 /***/ },
-/* 310 */
+/* 311 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var bufferWhen_1 = __webpack_require__(311);
+	var bufferWhen_1 = __webpack_require__(312);
 	Observable_1.Observable.prototype.bufferWhen = bufferWhen_1.bufferWhen;
 	//# sourceMappingURL=bufferWhen.js.map
 
 /***/ },
-/* 311 */
+/* 312 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -29467,18 +30029,18 @@
 	//# sourceMappingURL=bufferWhen.js.map
 
 /***/ },
-/* 312 */
+/* 313 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var catch_1 = __webpack_require__(313);
+	var catch_1 = __webpack_require__(314);
 	Observable_1.Observable.prototype.catch = catch_1._catch;
 	Observable_1.Observable.prototype._catch = catch_1._catch;
 	//# sourceMappingURL=catch.js.map
 
 /***/ },
-/* 313 */
+/* 314 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -29491,10 +30053,58 @@
 	var subscribeToResult_1 = __webpack_require__(212);
 	/**
 	 * Catches errors on the observable to be handled by returning a new observable or throwing an error.
+	 *
+	 * <img src="./img/catch.png" width="100%">
+	 *
+	 * @example <caption>Continues with a different Observable when there's an error</caption>
+	 *
+	 * Observable.of(1, 2, 3, 4, 5)
+	 *   .map(n => {
+	 * 	   if (n == 4) {
+	 * 	     throw 'four!';
+	 *     }
+	 *	   return n;
+	 *   })
+	 *   .catch(err => Observable.of('I', 'II', 'III', 'IV', 'V'))
+	 *   .subscribe(x => console.log(x));
+	 *   // 1, 2, 3, I, II, III, IV, V
+	 *
+	 * @example <caption>Retries the caught source Observable again in case of error, similar to retry() operator</caption>
+	 *
+	 * Observable.of(1, 2, 3, 4, 5)
+	 *   .map(n => {
+	 * 	   if (n === 4) {
+	 * 	     throw 'four!';
+	 *     }
+	 * 	   return n;
+	 *   })
+	 *   .catch((err, caught) => caught)
+	 *   .take(30)
+	 *   .subscribe(x => console.log(x));
+	 *   // 1, 2, 3, 1, 2, 3, ...
+	 *
+	 * @example <caption>Throws a new error when the source Observable throws an error</caption>
+	 *
+	 * Observable.of(1, 2, 3, 4, 5)
+	 *   .map(n => {
+	 *     if (n == 4) {
+	 *       throw 'four!';
+	 *     }
+	 *     return n;
+	 *   })
+	 *   .catch(err => {
+	 *     throw 'error in source. Details: ' + err;
+	 *   })
+	 *   .subscribe(
+	 *     x => console.log(x),
+	 *     err => console.log(err)
+	 *   );
+	 *   // 1, 2, 3, error in source. Details: four!
+	 *
 	 * @param {function} selector a function that takes as arguments `err`, which is the error, and `caught`, which
 	 *  is the source observable, in case you'd like to "retry" that observable by returning it again. Whatever observable
 	 *  is returned by the `selector` will be used to continue the observable chain.
-	 * @return {Observable} an observable that originates from either the source or the observable returned by the
+	 * @return {Observable} An observable that originates from either the source or the observable returned by the
 	 *  catch `selector` function.
 	 * @method catch
 	 * @name catch
@@ -29528,20 +30138,22 @@
 	        this.caught = caught;
 	    }
 	    // NOTE: overriding `error` instead of `_error` because we don't want
-	    // to have this flag this subscriber as `isStopped`.
+	    // to have this flag this subscriber as `isStopped`. We can mimic the
+	    // behavior of the RetrySubscriber (from the `retry` operator), where
+	    // we unsubscribe from our source chain, reset our Subscriber flags,
+	    // then subscribe to the selector result.
 	    CatchSubscriber.prototype.error = function (err) {
 	        if (!this.isStopped) {
 	            var result = void 0;
 	            try {
 	                result = this.selector(err, this.caught);
 	            }
-	            catch (err) {
-	                this.destination.error(err);
+	            catch (err2) {
+	                _super.prototype.error.call(this, err2);
 	                return;
 	            }
-	            this.unsubscribe();
-	            this.destination.remove(this);
-	            subscribeToResult_1.subscribeToResult(this, result);
+	            this._unsubscribeAndRecycle();
+	            this.add(subscribeToResult_1.subscribeToResult(this, result));
 	        }
 	    };
 	    return CatchSubscriber;
@@ -29549,17 +30161,17 @@
 	//# sourceMappingURL=catch.js.map
 
 /***/ },
-/* 314 */
+/* 315 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var combineAll_1 = __webpack_require__(315);
+	var combineAll_1 = __webpack_require__(316);
 	Observable_1.Observable.prototype.combineAll = combineAll_1.combineAll;
 	//# sourceMappingURL=combineAll.js.map
 
 /***/ },
-/* 315 */
+/* 316 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -29611,7 +30223,7 @@
 	//# sourceMappingURL=combineAll.js.map
 
 /***/ },
-/* 316 */
+/* 317 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -29621,32 +30233,32 @@
 	//# sourceMappingURL=combineLatest.js.map
 
 /***/ },
-/* 317 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var concat_1 = __webpack_require__(218);
-	Observable_1.Observable.prototype.concat = concat_1.concat;
-	//# sourceMappingURL=concat.js.map
-
-/***/ },
 /* 318 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var concatAll_1 = __webpack_require__(319);
-	Observable_1.Observable.prototype.concatAll = concatAll_1.concatAll;
-	//# sourceMappingURL=concatAll.js.map
+	var concat_1 = __webpack_require__(219);
+	Observable_1.Observable.prototype.concat = concat_1.concat;
+	//# sourceMappingURL=concat.js.map
 
 /***/ },
 /* 319 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var mergeAll_1 = __webpack_require__(219);
-	/* tslint:disable:max-line-length */
+	var Observable_1 = __webpack_require__(181);
+	var concatAll_1 = __webpack_require__(320);
+	Observable_1.Observable.prototype.concatAll = concatAll_1.concatAll;
+	//# sourceMappingURL=concatAll.js.map
+
+/***/ },
+/* 320 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var mergeAll_1 = __webpack_require__(220);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Converts a higher-order Observable into a first-order Observable by
 	 * concatenating the inner Observables in order.
@@ -29702,22 +30314,22 @@
 	//# sourceMappingURL=concatAll.js.map
 
 /***/ },
-/* 320 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var concatMap_1 = __webpack_require__(321);
-	Observable_1.Observable.prototype.concatMap = concatMap_1.concatMap;
-	//# sourceMappingURL=concatMap.js.map
-
-/***/ },
 /* 321 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var mergeMap_1 = __webpack_require__(322);
-	/* tslint:disable:max-line-length */
+	var Observable_1 = __webpack_require__(181);
+	var concatMap_1 = __webpack_require__(322);
+	Observable_1.Observable.prototype.concatMap = concatMap_1.concatMap;
+	//# sourceMappingURL=concatMap.js.map
+
+/***/ },
+/* 322 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var mergeMap_1 = __webpack_require__(323);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to an Observable which is merged in the output
 	 * Observable, in a serialized fashion waiting for each one to complete before
@@ -29759,7 +30371,7 @@
 	 * @see {@link mergeMap}
 	 * @see {@link switchMap}
 	 *
-	 * @param {function(value: T, ?index: number): Observable} project A function
+	 * @param {function(value: T, ?index: number): ObservableInput} project A function
 	 * that, when applied to an item emitted by the source Observable, returns an
 	 * Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
@@ -29770,7 +30382,7 @@
 	 * - `innerValue`: the value that came from the projected Observable
 	 * - `outerIndex`: the "index" of the value that came from the source
 	 * - `innerIndex`: the "index" of the value from the projected Observable
-	 * @return {Observable} an observable of values merged from the projected
+	 * @return {Observable} An observable of values merged from the projected
 	 * Observables as they were subscribed to, one at a time. Optionally, these
 	 * values may have been projected from a passed `projectResult` argument.
 	 * @return {Observable} An Observable that emits the result of applying the
@@ -29787,7 +30399,7 @@
 	//# sourceMappingURL=concatMap.js.map
 
 /***/ },
-/* 322 */
+/* 323 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -29798,7 +30410,7 @@
 	};
 	var subscribeToResult_1 = __webpack_require__(212);
 	var OuterSubscriber_1 = __webpack_require__(211);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to an Observable which is merged in the output
 	 * Observable.
@@ -29837,7 +30449,7 @@
 	 * @see {@link mergeScan}
 	 * @see {@link switchMap}
 	 *
-	 * @param {function(value: T, ?index: number): Observable} project A function
+	 * @param {function(value: T, ?index: number): ObservableInput} project A function
 	 * that, when applied to an item emitted by the source Observable, returns an
 	 * Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
@@ -29963,22 +30575,22 @@
 	//# sourceMappingURL=mergeMap.js.map
 
 /***/ },
-/* 323 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var concatMapTo_1 = __webpack_require__(324);
-	Observable_1.Observable.prototype.concatMapTo = concatMapTo_1.concatMapTo;
-	//# sourceMappingURL=concatMapTo.js.map
-
-/***/ },
 /* 324 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var mergeMapTo_1 = __webpack_require__(325);
-	/* tslint:disable:max-line-length */
+	var Observable_1 = __webpack_require__(181);
+	var concatMapTo_1 = __webpack_require__(325);
+	Observable_1.Observable.prototype.concatMapTo = concatMapTo_1.concatMapTo;
+	//# sourceMappingURL=concatMapTo.js.map
+
+/***/ },
+/* 325 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var mergeMapTo_1 = __webpack_require__(326);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to the same Observable which is merged multiple
 	 * times in a serialized fashion on the output Observable.
@@ -30019,7 +30631,7 @@
 	 * @see {@link mergeMapTo}
 	 * @see {@link switchMapTo}
 	 *
-	 * @param {Observable} innerObservable An Observable to replace each value from
+	 * @param {ObservableInput} innerObservable An Observable to replace each value from
 	 * the source Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
 	 * A function to produce the value on the output Observable based on the values
@@ -30042,7 +30654,7 @@
 	//# sourceMappingURL=concatMapTo.js.map
 
 /***/ },
-/* 325 */
+/* 326 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30053,7 +30665,7 @@
 	};
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to the same Observable which is merged multiple
 	 * times in the output Observable.
@@ -30079,7 +30691,7 @@
 	 * @see {@link mergeScan}
 	 * @see {@link switchMapTo}
 	 *
-	 * @param {Observable} innerObservable An Observable to replace each value from
+	 * @param {ObservableInput} innerObservable An Observable to replace each value from
 	 * the source Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
 	 * A function to produce the value on the output Observable based on the values
@@ -30202,17 +30814,17 @@
 	//# sourceMappingURL=mergeMapTo.js.map
 
 /***/ },
-/* 326 */
+/* 327 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var count_1 = __webpack_require__(327);
+	var count_1 = __webpack_require__(328);
 	Observable_1.Observable.prototype.count = count_1.count;
 	//# sourceMappingURL=count.js.map
 
 /***/ },
-/* 327 */
+/* 328 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30234,7 +30846,7 @@
 	 * `count` transforms an Observable that emits values into an Observable that
 	 * emits a single value that represents the number of values emitted by the
 	 * source Observable. If the source Observable terminates with an error, `count`
-	 * will pass this error notification along without emitting an value first. If
+	 * will pass this error notification along without emitting a value first. If
 	 * the source Observable does not terminate at all, `count` will neither emit
 	 * a value nor terminate. This operator takes an optional `predicate` function
 	 * as argument, in which case the output emission will represent the number of
@@ -30328,17 +30940,17 @@
 	//# sourceMappingURL=count.js.map
 
 /***/ },
-/* 328 */
+/* 329 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var dematerialize_1 = __webpack_require__(329);
+	var dematerialize_1 = __webpack_require__(330);
 	Observable_1.Observable.prototype.dematerialize = dematerialize_1.dematerialize;
 	//# sourceMappingURL=dematerialize.js.map
 
 /***/ },
-/* 329 */
+/* 330 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30418,17 +31030,17 @@
 	//# sourceMappingURL=dematerialize.js.map
 
 /***/ },
-/* 330 */
+/* 331 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var debounce_1 = __webpack_require__(331);
+	var debounce_1 = __webpack_require__(332);
 	Observable_1.Observable.prototype.debounce = debounce_1.debounce;
 	//# sourceMappingURL=debounce.js.map
 
 /***/ },
-/* 331 */
+/* 332 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30472,7 +31084,7 @@
 	 * @see {@link delayWhen}
 	 * @see {@link throttle}
 	 *
-	 * @param {function(value: T): Observable|Promise} durationSelector A function
+	 * @param {function(value: T): SubscribableOrPromise} durationSelector A function
 	 * that receives a value from the source Observable, for computing the timeout
 	 * duration for each source value, returned as an Observable or a Promise.
 	 * @return {Observable} An Observable that delays the emissions of the source
@@ -30560,17 +31172,17 @@
 	//# sourceMappingURL=debounce.js.map
 
 /***/ },
-/* 332 */
+/* 333 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var debounceTime_1 = __webpack_require__(333);
+	var debounceTime_1 = __webpack_require__(334);
 	Observable_1.Observable.prototype.debounceTime = debounceTime_1.debounceTime;
 	//# sourceMappingURL=debounceTime.js.map
 
 /***/ },
-/* 333 */
+/* 334 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30580,7 +31192,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	/**
 	 * Emits a value from the source Observable only after a particular time span
 	 * has passed without another source emission.
@@ -30601,7 +31213,7 @@
 	 * This is a rate-limiting operator, because it is impossible for more than one
 	 * value to be emitted in any time window of duration `dueTime`, but it is also
 	 * a delay-like operator since output emissions do not occur at the same time as
-	 * they did on the source Observable. Optionally takes a {@link Scheduler} for
+	 * they did on the source Observable. Optionally takes a {@link IScheduler} for
 	 * managing timers.
 	 *
 	 * @example <caption>Emit the most recent click after a burst of clicks</caption>
@@ -30619,7 +31231,7 @@
 	 * unit determined internally by the optional `scheduler`) for the window of
 	 * time required to wait for emission silence before emitting the most recent
 	 * source value.
-	 * @param {Scheduler} [scheduler=async] The {@link Scheduler} to use for
+	 * @param {Scheduler} [scheduler=async] The {@link IScheduler} to use for
 	 * managing the timers that handle the timeout for each value.
 	 * @return {Observable} An Observable that delays the emissions of the source
 	 * Observable by the specified `dueTime`, and may drop some values if they occur
@@ -30691,17 +31303,17 @@
 	//# sourceMappingURL=debounceTime.js.map
 
 /***/ },
-/* 334 */
+/* 335 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var defaultIfEmpty_1 = __webpack_require__(335);
+	var defaultIfEmpty_1 = __webpack_require__(336);
 	Observable_1.Observable.prototype.defaultIfEmpty = defaultIfEmpty_1.defaultIfEmpty;
 	//# sourceMappingURL=defaultIfEmpty.js.map
 
 /***/ },
-/* 335 */
+/* 336 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30711,7 +31323,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Emits a given value if the source Observable completes without emitting any
 	 * `next` value, otherwise mirrors the source Observable.
@@ -30783,17 +31395,17 @@
 	//# sourceMappingURL=defaultIfEmpty.js.map
 
 /***/ },
-/* 336 */
+/* 337 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var delay_1 = __webpack_require__(337);
+	var delay_1 = __webpack_require__(338);
 	Observable_1.Observable.prototype.delay = delay_1.delay;
 	//# sourceMappingURL=delay.js.map
 
 /***/ },
-/* 337 */
+/* 338 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30802,10 +31414,10 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var async_1 = __webpack_require__(253);
-	var isDate_1 = __webpack_require__(286);
+	var async_1 = __webpack_require__(254);
+	var isDate_1 = __webpack_require__(287);
 	var Subscriber_1 = __webpack_require__(184);
-	var Notification_1 = __webpack_require__(235);
+	var Notification_1 = __webpack_require__(236);
 	/**
 	 * Delays the emission of items from the source Observable by a given timeout or
 	 * until a given Date.
@@ -30838,7 +31450,7 @@
 	 *
 	 * @param {number|Date} delay The delay duration in milliseconds (a `number`) or
 	 * a `Date` until which the emission of the source items is delayed.
-	 * @param {Scheduler} [scheduler=async] The Scheduler to use for
+	 * @param {Scheduler} [scheduler=async] The IScheduler to use for
 	 * managing the timers that handle the time-shift for each item.
 	 * @return {Observable} An Observable that delays the emissions of the source
 	 * Observable by the specified timeout or Date.
@@ -30933,17 +31545,17 @@
 	//# sourceMappingURL=delay.js.map
 
 /***/ },
-/* 338 */
+/* 339 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var delayWhen_1 = __webpack_require__(339);
+	var delayWhen_1 = __webpack_require__(340);
 	Observable_1.Observable.prototype.delayWhen = delayWhen_1.delayWhen;
 	//# sourceMappingURL=delayWhen.js.map
 
 /***/ },
-/* 339 */
+/* 340 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31138,17 +31750,17 @@
 	//# sourceMappingURL=delayWhen.js.map
 
 /***/ },
-/* 340 */
+/* 341 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var distinct_1 = __webpack_require__(341);
+	var distinct_1 = __webpack_require__(342);
 	Observable_1.Observable.prototype.distinct = distinct_1.distinct;
 	//# sourceMappingURL=distinct.js.map
 
 /***/ },
-/* 341 */
+/* 342 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31159,20 +31771,49 @@
 	};
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	var Set_1 = __webpack_require__(342);
+	var Set_1 = __webpack_require__(343);
 	/**
 	 * Returns an Observable that emits all items emitted by the source Observable that are distinct by comparison from previous items.
+	 *
 	 * If a keySelector function is provided, then it will project each value from the source observable into a new value that it will
 	 * check for equality with previously projected values. If a keySelector function is not provided, it will use each value from the
 	 * source observable directly with an equality check against previous values.
+	 *
 	 * In JavaScript runtimes that support `Set`, this operator will use a `Set` to improve performance of the distinct value checking.
+	 *
 	 * In other runtimes, this operator will use a minimal implementation of `Set` that relies on an `Array` and `indexOf` under the
 	 * hood, so performance will degrade as more values are checked for distinction. Even in newer browsers, a long-running `distinct`
 	 * use might result in memory leaks. To help alleviate this in some scenarios, an optional `flushes` parameter is also provided so
 	 * that the internal `Set` can be "flushed", basically clearing it of values.
-	 * @param {function} [keySelector] optional function to select which value you want to check as distinct.
-	 * @param {Observable} [flushes] optional Observable for flushing the internal HashSet of the operator.
-	 * @return {Observable} an Observable that emits items from the source Observable with distinct values.
+	 *
+	 * @example <caption>A simple example with numbers</caption>
+	 * Observable.of(1, 1, 2, 2, 2, 1, 2, 3, 4, 3, 2, 1)
+	 *   .distinct()
+	 *   .subscribe(x => console.log(x)); // 1, 2, 3, 4
+	 *
+	 * @example <caption>An example using a keySelector function</caption>
+	 * interface Person {
+	 *    age: number,
+	 *    name: string
+	 * }
+	 *
+	 * Observable.of<Person>(
+	 *     { age: 4, name: 'Foo'},
+	 *     { age: 7, name: 'Bar'},
+	 *     { age: 5, name: 'Foo'})
+	 *     .distinct((p: Person) => p.name)
+	 *     .subscribe(x => console.log(x));
+	 *
+	 * // displays:
+	 * // { age: 4, name: 'Foo' }
+	 * // { age: 7, name: 'Bar' }
+	 *
+	 * @see {@link distinctUntilChanged}
+	 * @see {@link distinctUntilKeyChanged}
+	 *
+	 * @param {function} [keySelector] Optional function to select which value you want to check as distinct.
+	 * @param {Observable} [flushes] Optional Observable for flushing the internal HashSet of the operator.
+	 * @return {Observable} An Observable that emits items from the source Observable with distinct values.
 	 * @method distinct
 	 * @owner Observable
 	 */
@@ -31244,7 +31885,7 @@
 	//# sourceMappingURL=distinct.js.map
 
 /***/ },
-/* 342 */
+/* 343 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31282,17 +31923,17 @@
 	//# sourceMappingURL=Set.js.map
 
 /***/ },
-/* 343 */
+/* 344 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var distinctUntilChanged_1 = __webpack_require__(344);
+	var distinctUntilChanged_1 = __webpack_require__(345);
 	Observable_1.Observable.prototype.distinctUntilChanged = distinctUntilChanged_1.distinctUntilChanged;
 	//# sourceMappingURL=distinctUntilChanged.js.map
 
 /***/ },
-/* 344 */
+/* 345 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31304,13 +31945,43 @@
 	var Subscriber_1 = __webpack_require__(184);
 	var tryCatch_1 = __webpack_require__(189);
 	var errorObject_1 = __webpack_require__(190);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Returns an Observable that emits all items emitted by the source Observable that are distinct by comparison from the previous item.
+	 *
 	 * If a comparator function is provided, then it will be called for each item to test for whether or not that value should be emitted.
+	 *
 	 * If a comparator function is not provided, an equality check is used by default.
-	 * @param {function} [compare] optional comparison function called to test if an item is distinct from the previous item in the source.
-	 * @return {Observable} an Observable that emits items from the source Observable with distinct values.
+	 *
+	 * @example <caption>A simple example with numbers</caption>
+	 * Observable.of(1, 1, 2, 2, 2, 1, 1, 2, 3, 3, 4)
+	 *   .distinctUntilChanged()
+	 *   .subscribe(x => console.log(x)); // 1, 2, 1, 2, 3, 4
+	 *
+	 * @example <caption>An example using a compare function</caption>
+	 * interface Person {
+	 *    age: number,
+	 *    name: string
+	 * }
+	 *
+	 * Observable.of<Person>(
+	 *     { age: 4, name: 'Foo'},
+	 *     { age: 7, name: 'Bar'},
+	 *     { age: 5, name: 'Foo'})
+	 *     { age: 6, name: 'Foo'})
+	 *     .distinctUntilChanged((p: Person, q: Person) => p.name === q.name)
+	 *     .subscribe(x => console.log(x));
+	 *
+	 * // displays:
+	 * // { age: 4, name: 'Foo' }
+	 * // { age: 7, name: 'Bar' }
+	 * // { age: 5, name: 'Foo' }
+	 *
+	 * @see {@link distinct}
+	 * @see {@link distinctUntilKeyChanged}
+	 *
+	 * @param {function} [compare] Optional comparison function called to test if an item is distinct from the previous item in the source.
+	 * @return {Observable} An Observable that emits items from the source Observable with distinct values.
 	 * @method distinctUntilChanged
 	 * @owner Observable
 	 */
@@ -31375,30 +32046,76 @@
 	//# sourceMappingURL=distinctUntilChanged.js.map
 
 /***/ },
-/* 345 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var distinctUntilKeyChanged_1 = __webpack_require__(346);
-	Observable_1.Observable.prototype.distinctUntilKeyChanged = distinctUntilKeyChanged_1.distinctUntilKeyChanged;
-	//# sourceMappingURL=distinctUntilKeyChanged.js.map
-
-/***/ },
 /* 346 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var distinctUntilChanged_1 = __webpack_require__(344);
-	/* tslint:disable:max-line-length */
+	var Observable_1 = __webpack_require__(181);
+	var distinctUntilKeyChanged_1 = __webpack_require__(347);
+	Observable_1.Observable.prototype.distinctUntilKeyChanged = distinctUntilKeyChanged_1.distinctUntilKeyChanged;
+	//# sourceMappingURL=distinctUntilKeyChanged.js.map
+
+/***/ },
+/* 347 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var distinctUntilChanged_1 = __webpack_require__(345);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Returns an Observable that emits all items emitted by the source Observable that are distinct by comparison from the previous item,
 	 * using a property accessed by using the key provided to check if the two items are distinct.
+	 *
 	 * If a comparator function is provided, then it will be called for each item to test for whether or not that value should be emitted.
+	 *
 	 * If a comparator function is not provided, an equality check is used by default.
-	 * @param {string} key string key for object property lookup on each item.
-	 * @param {function} [compare] optional comparison function called to test if an item is distinct from the previous item in the source.
-	 * @return {Observable} an Observable that emits items from the source Observable with distinct values based on the key specified.
+	 *
+	 * @example <caption>An example comparing the name of persons</caption>
+	 *
+	 *  interface Person {
+	 *     age: number,
+	 *     name: string
+	 *  }
+	 *
+	 * Observable.of<Person>(
+	 *     { age: 4, name: 'Foo'},
+	 *     { age: 7, name: 'Bar'},
+	 *     { age: 5, name: 'Foo'},
+	 *     { age: 6, name: 'Foo'})
+	 *     .distinctUntilKeyChanged('name')
+	 *     .subscribe(x => console.log(x));
+	 *
+	 * // displays:
+	 * // { age: 4, name: 'Foo' }
+	 * // { age: 7, name: 'Bar' }
+	 * // { age: 5, name: 'Foo' }
+	 *
+	 * @example <caption>An example comparing the first letters of the name</caption>
+	 *
+	 * interface Person {
+	 *     age: number,
+	 *     name: string
+	 *  }
+	 *
+	 * Observable.of<Person>(
+	 *     { age: 4, name: 'Foo1'},
+	 *     { age: 7, name: 'Bar'},
+	 *     { age: 5, name: 'Foo2'},
+	 *     { age: 6, name: 'Foo3'})
+	 *     .distinctUntilKeyChanged('name', (x: string, y: string) => x.substring(0, 3) === y.substring(0, 3))
+	 *     .subscribe(x => console.log(x));
+	 *
+	 * // displays:
+	 * // { age: 4, name: 'Foo1' }
+	 * // { age: 7, name: 'Bar' }
+	 * // { age: 5, name: 'Foo2' }
+	 *
+	 * @see {@link distinct}
+	 * @see {@link distinctUntilChanged}
+	 *
+	 * @param {string} key String key for object property lookup on each item.
+	 * @param {function} [compare] Optional comparison function called to test if an item is distinct from the previous item in the source.
+	 * @return {Observable} An Observable that emits items from the source Observable with distinct values based on the key specified.
 	 * @method distinctUntilKeyChanged
 	 * @owner Observable
 	 */
@@ -31414,18 +32131,18 @@
 	//# sourceMappingURL=distinctUntilKeyChanged.js.map
 
 /***/ },
-/* 347 */
+/* 348 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var do_1 = __webpack_require__(348);
+	var do_1 = __webpack_require__(349);
 	Observable_1.Observable.prototype.do = do_1._do;
 	Observable_1.Observable.prototype._do = do_1._do;
 	//# sourceMappingURL=do.js.map
 
 /***/ },
-/* 348 */
+/* 349 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31435,7 +32152,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Perform a side effect for every emission on the source Observable, but return
 	 * an Observable that is identical to the source.
@@ -31543,17 +32260,17 @@
 	//# sourceMappingURL=do.js.map
 
 /***/ },
-/* 349 */
+/* 350 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var exhaust_1 = __webpack_require__(350);
+	var exhaust_1 = __webpack_require__(351);
 	Observable_1.Observable.prototype.exhaust = exhaust_1.exhaust;
 	//# sourceMappingURL=exhaust.js.map
 
 /***/ },
-/* 350 */
+/* 351 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31594,9 +32311,8 @@
 	 * @see {@link exhaustMap}
 	 * @see {@link zipAll}
 	 *
-	 * @return {Observable} Returns an Observable that takes a source of Observables
-	 * and propagates the first observable exclusively until it completes before
-	 * subscribing to the next.
+	 * @return {Observable} An Observable that takes a source of Observables and propagates the first observable
+	 * exclusively until it completes before subscribing to the next.
 	 * @method exhaust
 	 * @owner Observable
 	 */
@@ -31648,17 +32364,17 @@
 	//# sourceMappingURL=exhaust.js.map
 
 /***/ },
-/* 351 */
+/* 352 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var exhaustMap_1 = __webpack_require__(352);
+	var exhaustMap_1 = __webpack_require__(353);
 	Observable_1.Observable.prototype.exhaustMap = exhaustMap_1.exhaustMap;
 	//# sourceMappingURL=exhaustMap.js.map
 
 /***/ },
-/* 352 */
+/* 353 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31669,7 +32385,7 @@
 	};
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to an Observable which is merged in the output
 	 * Observable only if the previous projected Observable has completed.
@@ -31698,7 +32414,7 @@
 	 * @see {@link mergeMap}
 	 * @see {@link switchMap}
 	 *
-	 * @param {function(value: T, ?index: number): Observable} project A function
+	 * @param {function(value: T, ?index: number): ObservableInput} project A function
 	 * that, when applied to an item emitted by the source Observable, returns an
 	 * Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
@@ -31801,17 +32517,17 @@
 	//# sourceMappingURL=exhaustMap.js.map
 
 /***/ },
-/* 353 */
+/* 354 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var expand_1 = __webpack_require__(354);
+	var expand_1 = __webpack_require__(355);
 	Observable_1.Observable.prototype.expand = expand_1.expand;
 	//# sourceMappingURL=expand.js.map
 
 /***/ },
-/* 354 */
+/* 355 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31824,7 +32540,7 @@
 	var errorObject_1 = __webpack_require__(190);
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Recursively projects each source value to an Observable which is merged in
 	 * the output Observable.
@@ -31861,7 +32577,7 @@
 	 * returns an Observable.
 	 * @param {number} [concurrent=Number.POSITIVE_INFINITY] Maximum number of input
 	 * Observables being subscribed to concurrently.
-	 * @param {Scheduler} [scheduler=null] The Scheduler to use for subscribing to
+	 * @param {Scheduler} [scheduler=null] The IScheduler to use for subscribing to
 	 * each projected inner Observable.
 	 * @return {Observable} An Observable that emits the source values and also
 	 * result of applying the projection function to each value emitted on the
@@ -31967,17 +32683,17 @@
 	//# sourceMappingURL=expand.js.map
 
 /***/ },
-/* 355 */
+/* 356 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var elementAt_1 = __webpack_require__(356);
+	var elementAt_1 = __webpack_require__(357);
 	Observable_1.Observable.prototype.elementAt = elementAt_1.elementAt;
 	//# sourceMappingURL=elementAt.js.map
 
 /***/ },
-/* 356 */
+/* 357 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -31987,7 +32703,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var ArgumentOutOfRangeError_1 = __webpack_require__(357);
+	var ArgumentOutOfRangeError_1 = __webpack_require__(358);
 	/**
 	 * Emits the single value at the specified `index` in a sequence of emissions
 	 * from the source Observable.
@@ -32082,7 +32798,7 @@
 	//# sourceMappingURL=elementAt.js.map
 
 /***/ },
-/* 357 */
+/* 358 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -32115,17 +32831,17 @@
 	//# sourceMappingURL=ArgumentOutOfRangeError.js.map
 
 /***/ },
-/* 358 */
+/* 359 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var filter_1 = __webpack_require__(359);
+	var filter_1 = __webpack_require__(360);
 	Observable_1.Observable.prototype.filter = filter_1.filter;
 	//# sourceMappingURL=filter.js.map
 
 /***/ },
-/* 359 */
+/* 360 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -32135,7 +32851,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Filter items emitted by the source Observable by only emitting those that
 	 * satisfy a specified predicate.
@@ -32223,18 +32939,18 @@
 	//# sourceMappingURL=filter.js.map
 
 /***/ },
-/* 360 */
+/* 361 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var finally_1 = __webpack_require__(361);
+	var finally_1 = __webpack_require__(362);
 	Observable_1.Observable.prototype.finally = finally_1._finally;
 	Observable_1.Observable.prototype._finally = finally_1._finally;
 	//# sourceMappingURL=finally.js.map
 
 /***/ },
-/* 361 */
+/* 362 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -32248,8 +32964,8 @@
 	/**
 	 * Returns an Observable that mirrors the source Observable, but will call a specified function when
 	 * the source terminates on complete or error.
-	 * @param {function} callback function to be called when source terminates.
-	 * @return {Observable} an Observable that mirrors the source, but will call the specified function on termination.
+	 * @param {function} callback Function to be called when source terminates.
+	 * @return {Observable} An Observable that mirrors the source, but will call the specified function on termination.
 	 * @method finally
 	 * @owner Observable
 	 */
@@ -32282,17 +32998,17 @@
 	//# sourceMappingURL=finally.js.map
 
 /***/ },
-/* 362 */
+/* 363 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var find_1 = __webpack_require__(363);
+	var find_1 = __webpack_require__(364);
 	Observable_1.Observable.prototype.find = find_1.find;
 	//# sourceMappingURL=find.js.map
 
 /***/ },
-/* 363 */
+/* 364 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -32302,7 +33018,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Emits only the first value emitted by the source Observable that meets some
 	 * condition.
@@ -32398,21 +33114,21 @@
 	//# sourceMappingURL=find.js.map
 
 /***/ },
-/* 364 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var findIndex_1 = __webpack_require__(365);
-	Observable_1.Observable.prototype.findIndex = findIndex_1.findIndex;
-	//# sourceMappingURL=findIndex.js.map
-
-/***/ },
 /* 365 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var find_1 = __webpack_require__(363);
+	var Observable_1 = __webpack_require__(181);
+	var findIndex_1 = __webpack_require__(366);
+	Observable_1.Observable.prototype.findIndex = findIndex_1.findIndex;
+	//# sourceMappingURL=findIndex.js.map
+
+/***/ },
+/* 366 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var find_1 = __webpack_require__(364);
 	/**
 	 * Emits only the index of the first value emitted by the source Observable that
 	 * meets some condition.
@@ -32454,17 +33170,17 @@
 	//# sourceMappingURL=findIndex.js.map
 
 /***/ },
-/* 366 */
+/* 367 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var first_1 = __webpack_require__(367);
+	var first_1 = __webpack_require__(368);
 	Observable_1.Observable.prototype.first = first_1.first;
 	//# sourceMappingURL=first.js.map
 
 /***/ },
-/* 367 */
+/* 368 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -32474,7 +33190,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var EmptyError_1 = __webpack_require__(368);
+	var EmptyError_1 = __webpack_require__(369);
 	/**
 	 * Emits only the first value (or the first value that meets some condition)
 	 * emitted by the source Observable.
@@ -32519,7 +33235,7 @@
 	 * - `index`: the "index" of the value from the source.
 	 * @param {R} [defaultValue] The default value emitted in case no valid value
 	 * was found on the source.
-	 * @return {Observable<T|R>} an Observable of the first item that matches the
+	 * @return {Observable<T|R>} An Observable of the first item that matches the
 	 * condition.
 	 * @method first
 	 * @owner Observable
@@ -32621,7 +33337,7 @@
 	//# sourceMappingURL=first.js.map
 
 /***/ },
-/* 368 */
+/* 369 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -32654,17 +33370,17 @@
 	//# sourceMappingURL=EmptyError.js.map
 
 /***/ },
-/* 369 */
+/* 370 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var groupBy_1 = __webpack_require__(370);
+	var groupBy_1 = __webpack_require__(371);
 	Observable_1.Observable.prototype.groupBy = groupBy_1.groupBy;
 	//# sourceMappingURL=groupBy.js.map
 
 /***/ },
-/* 370 */
+/* 371 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -32677,9 +33393,9 @@
 	var Subscription_1 = __webpack_require__(186);
 	var Observable_1 = __webpack_require__(181);
 	var Subject_1 = __webpack_require__(180);
-	var Map_1 = __webpack_require__(371);
-	var FastMap_1 = __webpack_require__(373);
-	/* tslint:disable:max-line-length */
+	var Map_1 = __webpack_require__(372);
+	var FastMap_1 = __webpack_require__(374);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Groups the items emitted by an Observable according to a specified criterion,
 	 * and emits these grouped items as `GroupedObservables`, one
@@ -32687,14 +33403,14 @@
 	 *
 	 * <img src="./img/groupBy.png" width="100%">
 	 *
-	 * @param {function(value: T): K} keySelector a function that extracts the key
+	 * @param {function(value: T): K} keySelector A function that extracts the key
 	 * for each item.
-	 * @param {function(value: T): R} [elementSelector] a function that extracts the
+	 * @param {function(value: T): R} [elementSelector] A function that extracts the
 	 * return element for each item.
 	 * @param {function(grouped: GroupedObservable<K,R>): Observable<any>} [durationSelector]
-	 * a function that returns an Observable to determine how long each group should
+	 * A function that returns an Observable to determine how long each group should
 	 * exist.
-	 * @return {Observable<GroupedObservable<K,R>>} an Observable that emits
+	 * @return {Observable<GroupedObservable<K,R>>} An Observable that emits
 	 * GroupedObservables, each of which corresponds to a unique key value and each
 	 * of which emits those items from the source Observable that share that key
 	 * value.
@@ -32904,17 +33620,17 @@
 	//# sourceMappingURL=groupBy.js.map
 
 /***/ },
-/* 371 */
+/* 372 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var root_1 = __webpack_require__(182);
-	var MapPolyfill_1 = __webpack_require__(372);
+	var MapPolyfill_1 = __webpack_require__(373);
 	exports.Map = root_1.root.Map || (function () { return MapPolyfill_1.MapPolyfill; })();
 	//# sourceMappingURL=Map.js.map
 
 /***/ },
-/* 372 */
+/* 373 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -32966,7 +33682,7 @@
 	//# sourceMappingURL=MapPolyfill.js.map
 
 /***/ },
-/* 373 */
+/* 374 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -33002,17 +33718,17 @@
 	//# sourceMappingURL=FastMap.js.map
 
 /***/ },
-/* 374 */
+/* 375 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var ignoreElements_1 = __webpack_require__(375);
+	var ignoreElements_1 = __webpack_require__(376);
 	Observable_1.Observable.prototype.ignoreElements = ignoreElements_1.ignoreElements;
 	//# sourceMappingURL=ignoreElements.js.map
 
 /***/ },
-/* 375 */
+/* 376 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33022,13 +33738,13 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var noop_1 = __webpack_require__(266);
+	var noop_1 = __webpack_require__(267);
 	/**
 	 * Ignores all items emitted by the source Observable and only passes calls of `complete` or `error`.
 	 *
 	 * <img src="./img/ignoreElements.png" width="100%">
 	 *
-	 * @return {Observable} an empty Observable that only calls `complete`
+	 * @return {Observable} An empty Observable that only calls `complete`
 	 * or `error`, based on which one is called by the source Observable.
 	 * @method ignoreElements
 	 * @owner Observable
@@ -33064,17 +33780,17 @@
 	//# sourceMappingURL=ignoreElements.js.map
 
 /***/ },
-/* 376 */
+/* 377 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var isEmpty_1 = __webpack_require__(377);
+	var isEmpty_1 = __webpack_require__(378);
 	Observable_1.Observable.prototype.isEmpty = isEmpty_1.isEmpty;
 	//# sourceMappingURL=isEmpty.js.map
 
 /***/ },
-/* 377 */
+/* 378 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33089,7 +33805,7 @@
 	 *
 	 * <img src="./img/isEmpty.png" width="100%">
 	 *
-	 * @return {Observable} an Observable that emits a Boolean.
+	 * @return {Observable} An Observable that emits a Boolean.
 	 * @method isEmpty
 	 * @owner Observable
 	 */
@@ -33131,17 +33847,17 @@
 	//# sourceMappingURL=isEmpty.js.map
 
 /***/ },
-/* 378 */
+/* 379 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var audit_1 = __webpack_require__(379);
+	var audit_1 = __webpack_require__(380);
 	Observable_1.Observable.prototype.audit = audit_1.audit;
 	//# sourceMappingURL=audit.js.map
 
 /***/ },
-/* 379 */
+/* 380 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33186,7 +33902,7 @@
 	 * @see {@link sample}
 	 * @see {@link throttle}
 	 *
-	 * @param {function(value: T): Observable|Promise} durationSelector A function
+	 * @param {function(value: T): SubscribableOrPromise} durationSelector A function
 	 * that receives a value from the source Observable, for computing the silencing
 	 * duration, returned as an Observable or a Promise.
 	 * @return {Observable<T>} An Observable that performs rate-limiting of
@@ -33256,17 +33972,17 @@
 	//# sourceMappingURL=audit.js.map
 
 /***/ },
-/* 380 */
+/* 381 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var auditTime_1 = __webpack_require__(381);
+	var auditTime_1 = __webpack_require__(382);
 	Observable_1.Observable.prototype.auditTime = auditTime_1.auditTime;
 	//# sourceMappingURL=auditTime.js.map
 
 /***/ },
-/* 381 */
+/* 382 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33275,7 +33991,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	var Subscriber_1 = __webpack_require__(184);
 	/**
 	 * Ignores source values for `duration` milliseconds, then emits the most recent
@@ -33296,7 +34012,7 @@
 	 * the time unit determined internally by the optional `scheduler`) has passed,
 	 * the timer is disabled, then the most recent source value is emitted on the
 	 * output Observable, and this process repeats for the next source value.
-	 * Optionally takes a {@link Scheduler} for managing timers.
+	 * Optionally takes a {@link IScheduler} for managing timers.
 	 *
 	 * @example <caption>Emit clicks at a rate of at most one click per second</caption>
 	 * var clicks = Rx.Observable.fromEvent(document, 'click');
@@ -33312,7 +34028,7 @@
 	 * @param {number} duration Time to wait before emitting the most recent source
 	 * value, measured in milliseconds or the time unit determined internally
 	 * by the optional `scheduler`.
-	 * @param {Scheduler} [scheduler=async] The {@link Scheduler} to use for
+	 * @param {Scheduler} [scheduler=async] The {@link IScheduler} to use for
 	 * managing the timers that handle the rate-limiting behavior.
 	 * @return {Observable<T>} An Observable that performs rate-limiting of
 	 * emissions from the source Observable.
@@ -33375,17 +34091,17 @@
 	//# sourceMappingURL=auditTime.js.map
 
 /***/ },
-/* 382 */
+/* 383 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var last_1 = __webpack_require__(383);
+	var last_1 = __webpack_require__(384);
 	Observable_1.Observable.prototype.last = last_1.last;
 	//# sourceMappingURL=last.js.map
 
 /***/ },
-/* 383 */
+/* 384 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33395,8 +34111,8 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var EmptyError_1 = __webpack_require__(368);
-	/* tslint:disable:max-line-length */
+	var EmptyError_1 = __webpack_require__(369);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Returns an Observable that emits only the last item emitted by the source Observable.
 	 * It optionally takes a predicate function as a parameter, in which case, rather than emitting
@@ -33407,8 +34123,8 @@
 	 *
 	 * @throws {EmptyError} Delivers an EmptyError to the Observer's `error`
 	 * callback if the Observable completes before any `next` notification was sent.
-	 * @param {function} predicate - the condition any source emitted item has to satisfy.
-	 * @return {Observable} an Observable that emits only the last item satisfying the given condition
+	 * @param {function} predicate - The condition any source emitted item has to satisfy.
+	 * @return {Observable} An Observable that emits only the last item satisfying the given condition
 	 * from the source, or an NoSuchElementException if no such items are emitted.
 	 * @throws - Throws if no items that match the predicate are emitted by the source Observable.
 	 * @method last
@@ -33509,18 +34225,18 @@
 	//# sourceMappingURL=last.js.map
 
 /***/ },
-/* 384 */
+/* 385 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var let_1 = __webpack_require__(385);
+	var let_1 = __webpack_require__(386);
 	Observable_1.Observable.prototype.let = let_1.letProto;
 	Observable_1.Observable.prototype.letBind = let_1.letProto;
 	//# sourceMappingURL=let.js.map
 
 /***/ },
-/* 385 */
+/* 386 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -33537,17 +34253,17 @@
 	//# sourceMappingURL=let.js.map
 
 /***/ },
-/* 386 */
+/* 387 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var every_1 = __webpack_require__(387);
+	var every_1 = __webpack_require__(388);
 	Observable_1.Observable.prototype.every = every_1.every;
 	//# sourceMappingURL=every.js.map
 
 /***/ },
-/* 387 */
+/* 388 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33559,9 +34275,15 @@
 	var Subscriber_1 = __webpack_require__(184);
 	/**
 	 * Returns an Observable that emits whether or not every item of the source satisfies the condition specified.
-	 * @param {function} predicate a function for determining if an item meets a specified condition.
-	 * @param {any} [thisArg] optional object to use for `this` in the callback
-	 * @return {Observable} an Observable of booleans that determines if all items of the source Observable meet the condition specified.
+	 *
+	 * @example <caption>A simple example emitting true if all elements are less than 5, false otherwise</caption>
+	 *  Observable.of(1, 2, 3, 4, 5, 6)
+	 *     .every(x => x < 5)
+	 *     .subscribe(x => console.log(x)); // -> false
+	 *
+	 * @param {function} predicate A function for determining if an item meets a specified condition.
+	 * @param {any} [thisArg] Optional object to use for `this` in the callback.
+	 * @return {Observable} An Observable of booleans that determines if all items of the source Observable meet the condition specified.
 	 * @method every
 	 * @owner Observable
 	 */
@@ -33620,27 +34342,27 @@
 	//# sourceMappingURL=every.js.map
 
 /***/ },
-/* 388 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var map_1 = __webpack_require__(293);
-	Observable_1.Observable.prototype.map = map_1.map;
-	//# sourceMappingURL=map.js.map
-
-/***/ },
 /* 389 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var mapTo_1 = __webpack_require__(390);
+	var map_1 = __webpack_require__(294);
+	Observable_1.Observable.prototype.map = map_1.map;
+	//# sourceMappingURL=map.js.map
+
+/***/ },
+/* 390 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var mapTo_1 = __webpack_require__(391);
 	Observable_1.Observable.prototype.mapTo = mapTo_1.mapTo;
 	//# sourceMappingURL=mapTo.js.map
 
 /***/ },
-/* 390 */
+/* 391 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33708,17 +34430,17 @@
 	//# sourceMappingURL=mapTo.js.map
 
 /***/ },
-/* 391 */
+/* 392 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var materialize_1 = __webpack_require__(392);
+	var materialize_1 = __webpack_require__(393);
 	Observable_1.Observable.prototype.materialize = materialize_1.materialize;
 	//# sourceMappingURL=materialize.js.map
 
 /***/ },
-/* 392 */
+/* 393 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33728,7 +34450,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var Notification_1 = __webpack_require__(235);
+	var Notification_1 = __webpack_require__(236);
 	/**
 	 * Represents all of the notifications from the source Observable as `next`
 	 * emissions marked with their original types within {@link Notification}
@@ -33813,30 +34535,49 @@
 	//# sourceMappingURL=materialize.js.map
 
 /***/ },
-/* 393 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var max_1 = __webpack_require__(394);
-	Observable_1.Observable.prototype.max = max_1.max;
-	//# sourceMappingURL=max.js.map
-
-/***/ },
 /* 394 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var reduce_1 = __webpack_require__(395);
+	var Observable_1 = __webpack_require__(181);
+	var max_1 = __webpack_require__(395);
+	Observable_1.Observable.prototype.max = max_1.max;
+	//# sourceMappingURL=max.js.map
+
+/***/ },
+/* 395 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var reduce_1 = __webpack_require__(396);
 	/**
-	 * The Max operator operates on an Observable that emits numbers (or items that can be evaluated as numbers),
-	 * and when source Observable completes it emits a single item: the item with the largest number.
+	 * The Max operator operates on an Observable that emits numbers (or items that can be compared with a provided function),
+	 * and when source Observable completes it emits a single item: the item with the largest value.
 	 *
 	 * <img src="./img/max.png" width="100%">
 	 *
-	 * @param {Function} optional comparer function that it will use instead of its default to compare the value of two
-	 * items.
-	 * @return {Observable} an Observable that emits item with the largest number.
+	 * @example <caption>Get the maximal value of a series of numbers</caption>
+	 * Rx.Observable.of(5, 4, 7, 2, 8)
+	 *   .max()
+	 *   .subscribe(x => console.log(x)); // -> 8
+	 *
+	 * @example <caption>Use a comparer function to get the maximal item</caption>
+	 * interface Person {
+	 *   age: number,
+	 *   name: string
+	 * }
+	 * Observable.of<Person>({age: 7, name: 'Foo'},
+	 *                       {age: 5, name: 'Bar'},
+	 *                       {age: 9, name: 'Beer'})
+	 *           .max<Person>((a: Person, b: Person) => a.age < b.age ? -1 : 1)
+	 *           .subscribe((x: Person) => console.log(x.name)); // -> 'Beer'
+	 * }
+	 *
+	 * @see {@link min}
+	 *
+	 * @param {Function} [comparer] - Optional comparer function that it will use instead of its default to compare the
+	 * value of two items.
+	 * @return {Observable} An Observable that emits item with the largest value.
 	 * @method max
 	 * @owner Observable
 	 */
@@ -33850,7 +34591,7 @@
 	//# sourceMappingURL=max.js.map
 
 /***/ },
-/* 395 */
+/* 396 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -33860,7 +34601,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Applies an accumulator function over the source Observable, and returns the
 	 * accumulated result when the source completes, given an optional seed value.
@@ -33897,10 +34638,9 @@
 	 * @see {@link mergeScan}
 	 * @see {@link scan}
 	 *
-	 * @param {function(acc: R, value: T): R} accumulator The accumulator function
+	 * @param {function(acc: R, value: T, index: number): R} accumulator The accumulator function
 	 * called on each source value.
 	 * @param {R} [seed] The initial accumulation value.
-	 * @return {Observable<R>} An observable of the accumulated values.
 	 * @return {Observable<R>} An Observable that emits a single value that is the
 	 * result of accumulating the values emitted by the source Observable.
 	 * @method reduce
@@ -33943,8 +34683,12 @@
 	        _super.call(this, destination);
 	        this.accumulator = accumulator;
 	        this.hasSeed = hasSeed;
+	        this.index = 0;
 	        this.hasValue = false;
 	        this.acc = seed;
+	        if (!this.hasSeed) {
+	            this.index++;
+	        }
 	    }
 	    ReduceSubscriber.prototype._next = function (value) {
 	        if (this.hasValue || (this.hasValue = this.hasSeed)) {
@@ -33958,7 +34702,7 @@
 	    ReduceSubscriber.prototype._tryReduce = function (value) {
 	        var result;
 	        try {
-	            result = this.accumulator(this.acc, value);
+	            result = this.accumulator(this.acc, value, this.index++);
 	        }
 	        catch (err) {
 	            this.destination.error(err);
@@ -33978,24 +34722,14 @@
 	//# sourceMappingURL=reduce.js.map
 
 /***/ },
-/* 396 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var merge_1 = __webpack_require__(260);
-	Observable_1.Observable.prototype.merge = merge_1.merge;
-	//# sourceMappingURL=merge.js.map
-
-/***/ },
 /* 397 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var mergeAll_1 = __webpack_require__(219);
-	Observable_1.Observable.prototype.mergeAll = mergeAll_1.mergeAll;
-	//# sourceMappingURL=mergeAll.js.map
+	var merge_1 = __webpack_require__(261);
+	Observable_1.Observable.prototype.merge = merge_1.merge;
+	//# sourceMappingURL=merge.js.map
 
 /***/ },
 /* 398 */
@@ -34003,10 +34737,9 @@
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var mergeMap_1 = __webpack_require__(322);
-	Observable_1.Observable.prototype.mergeMap = mergeMap_1.mergeMap;
-	Observable_1.Observable.prototype.flatMap = mergeMap_1.mergeMap;
-	//# sourceMappingURL=mergeMap.js.map
+	var mergeAll_1 = __webpack_require__(220);
+	Observable_1.Observable.prototype.mergeAll = mergeAll_1.mergeAll;
+	//# sourceMappingURL=mergeAll.js.map
 
 /***/ },
 /* 399 */
@@ -34014,10 +34747,10 @@
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var mergeMapTo_1 = __webpack_require__(325);
-	Observable_1.Observable.prototype.flatMapTo = mergeMapTo_1.mergeMapTo;
-	Observable_1.Observable.prototype.mergeMapTo = mergeMapTo_1.mergeMapTo;
-	//# sourceMappingURL=mergeMapTo.js.map
+	var mergeMap_1 = __webpack_require__(323);
+	Observable_1.Observable.prototype.mergeMap = mergeMap_1.mergeMap;
+	Observable_1.Observable.prototype.flatMap = mergeMap_1.mergeMap;
+	//# sourceMappingURL=mergeMap.js.map
 
 /***/ },
 /* 400 */
@@ -34025,12 +34758,23 @@
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var mergeScan_1 = __webpack_require__(401);
+	var mergeMapTo_1 = __webpack_require__(326);
+	Observable_1.Observable.prototype.flatMapTo = mergeMapTo_1.mergeMapTo;
+	Observable_1.Observable.prototype.mergeMapTo = mergeMapTo_1.mergeMapTo;
+	//# sourceMappingURL=mergeMapTo.js.map
+
+/***/ },
+/* 401 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var mergeScan_1 = __webpack_require__(402);
 	Observable_1.Observable.prototype.mergeScan = mergeScan_1.mergeScan;
 	//# sourceMappingURL=mergeScan.js.map
 
 /***/ },
-/* 401 */
+/* 402 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -34044,26 +34788,49 @@
 	var subscribeToResult_1 = __webpack_require__(212);
 	var OuterSubscriber_1 = __webpack_require__(211);
 	/**
-	 * @param project
-	 * @param seed
-	 * @param concurrent
-	 * @return {Observable<R>|WebSocketSubject<T>|Observable<T>}
+	 * Applies an accumulator function over the source Observable where the
+	 * accumulator function itself returns an Observable, then each intermediate
+	 * Observable returned is merged into the output Observable.
+	 *
+	 * <span class="informal">It's like {@link scan}, but the Observables returned
+	 * by the accumulator are merged into the outer Observable.</span>
+	 *
+	 * @example <caption>Count the number of click events</caption>
+	 * const click$ = Rx.Observable.fromEvent(document, 'click');
+	 * const one$ = click$.mapTo(1);
+	 * const seed = 0;
+	 * const count$ = one$.mergeScan((acc, one) => Rx.Observable.of(acc + one), seed);
+	 * count$.subscribe(x => console.log(x));
+	 *
+	 * // Results:
+	 * 1
+	 * 2
+	 * 3
+	 * 4
+	 * // ...and so on for each click
+	 *
+	 * @param {function(acc: R, value: T): Observable<R>} accumulator
+	 * The accumulator function called on each source value.
+	 * @param seed The initial accumulation value.
+	 * @param {number} [concurrent=Number.POSITIVE_INFINITY] Maximum number of
+	 * input Observables being subscribed to concurrently.
+	 * @return {Observable<R>} An observable of the accumulated values.
 	 * @method mergeScan
 	 * @owner Observable
 	 */
-	function mergeScan(project, seed, concurrent) {
+	function mergeScan(accumulator, seed, concurrent) {
 	    if (concurrent === void 0) { concurrent = Number.POSITIVE_INFINITY; }
-	    return this.lift(new MergeScanOperator(project, seed, concurrent));
+	    return this.lift(new MergeScanOperator(accumulator, seed, concurrent));
 	}
 	exports.mergeScan = mergeScan;
 	var MergeScanOperator = (function () {
-	    function MergeScanOperator(project, seed, concurrent) {
-	        this.project = project;
+	    function MergeScanOperator(accumulator, seed, concurrent) {
+	        this.accumulator = accumulator;
 	        this.seed = seed;
 	        this.concurrent = concurrent;
 	    }
 	    MergeScanOperator.prototype.call = function (subscriber, source) {
-	        return source.subscribe(new MergeScanSubscriber(subscriber, this.project, this.seed, this.concurrent));
+	        return source.subscribe(new MergeScanSubscriber(subscriber, this.accumulator, this.seed, this.concurrent));
 	    };
 	    return MergeScanOperator;
 	}());
@@ -34075,9 +34842,9 @@
 	 */
 	var MergeScanSubscriber = (function (_super) {
 	    __extends(MergeScanSubscriber, _super);
-	    function MergeScanSubscriber(destination, project, acc, concurrent) {
+	    function MergeScanSubscriber(destination, accumulator, acc, concurrent) {
 	        _super.call(this, destination);
-	        this.project = project;
+	        this.accumulator = accumulator;
 	        this.acc = acc;
 	        this.concurrent = concurrent;
 	        this.hasValue = false;
@@ -34089,7 +34856,7 @@
 	    MergeScanSubscriber.prototype._next = function (value) {
 	        if (this.active < this.concurrent) {
 	            var index = this.index++;
-	            var ish = tryCatch_1.tryCatch(this.project)(this.acc, value);
+	            var ish = tryCatch_1.tryCatch(this.accumulator)(this.acc, value);
 	            var destination = this.destination;
 	            if (ish === errorObject_1.errorObject) {
 	                destination.error(errorObject_1.errorObject.e);
@@ -34141,29 +34908,49 @@
 	//# sourceMappingURL=mergeScan.js.map
 
 /***/ },
-/* 402 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var min_1 = __webpack_require__(403);
-	Observable_1.Observable.prototype.min = min_1.min;
-	//# sourceMappingURL=min.js.map
-
-/***/ },
 /* 403 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var reduce_1 = __webpack_require__(395);
+	var Observable_1 = __webpack_require__(181);
+	var min_1 = __webpack_require__(404);
+	Observable_1.Observable.prototype.min = min_1.min;
+	//# sourceMappingURL=min.js.map
+
+/***/ },
+/* 404 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var reduce_1 = __webpack_require__(396);
 	/**
-	 * The Min operator operates on an Observable that emits numbers (or items that can be evaluated as numbers),
-	 * and when source Observable completes it emits a single item: the item with the smallest number.
+	 * The Min operator operates on an Observable that emits numbers (or items that can be compared with a provided function),
+	 * and when source Observable completes it emits a single item: the item with the smallest value.
 	 *
 	 * <img src="./img/min.png" width="100%">
 	 *
-	 * @param {Function} optional comparer function that it will use instead of its default to compare the value of two items.
-	 * @return {Observable<R>} an Observable that emits item with the smallest number.
+	 * @example <caption>Get the minimal value of a series of numbers</caption>
+	 * Rx.Observable.of(5, 4, 7, 2, 8)
+	 *   .min()
+	 *   .subscribe(x => console.log(x)); // -> 2
+	 *
+	 * @example <caption>Use a comparer function to get the minimal item</caption>
+	 * interface Person {
+	 *   age: number,
+	 *   name: string
+	 * }
+	 * Observable.of<Person>({age: 7, name: 'Foo'},
+	 *                       {age: 5, name: 'Bar'},
+	 *                       {age: 9, name: 'Beer'})
+	 *           .min<Person>( (a: Person, b: Person) => a.age < b.age ? -1 : 1)
+	 *           .subscribe((x: Person) => console.log(x.name)); // -> 'Bar'
+	 * }
+	 *
+	 * @see {@link max}
+	 *
+	 * @param {Function} [comparer] - Optional comparer function that it will use instead of its default to compare the
+	 * value of two items.
+	 * @return {Observable<R>} An Observable that emits item with the smallest value.
 	 * @method min
 	 * @owner Observable
 	 */
@@ -34177,36 +34964,36 @@
 	//# sourceMappingURL=min.js.map
 
 /***/ },
-/* 404 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var multicast_1 = __webpack_require__(405);
-	Observable_1.Observable.prototype.multicast = multicast_1.multicast;
-	//# sourceMappingURL=multicast.js.map
-
-/***/ },
 /* 405 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var ConnectableObservable_1 = __webpack_require__(406);
-	/* tslint:disable:max-line-length */
+	var Observable_1 = __webpack_require__(181);
+	var multicast_1 = __webpack_require__(406);
+	Observable_1.Observable.prototype.multicast = multicast_1.multicast;
+	//# sourceMappingURL=multicast.js.map
+
+/***/ },
+/* 406 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var ConnectableObservable_1 = __webpack_require__(407);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Returns an Observable that emits the results of invoking a specified selector on items
 	 * emitted by a ConnectableObservable that shares a single subscription to the underlying stream.
 	 *
 	 * <img src="./img/multicast.png" width="100%">
 	 *
-	 * @param {Function|Subject} Factory function to create an intermediate subject through
+	 * @param {Function|Subject} subjectOrSubjectFactory - Factory function to create an intermediate subject through
 	 * which the source sequence's elements will be multicast to the selector function
 	 * or Subject to push source elements into.
-	 * @param {Function} Optional selector function that can use the multicasted source stream
+	 * @param {Function} [selector] - Optional selector function that can use the multicasted source stream
 	 * as many times as needed, without causing multiple subscriptions to the source stream.
 	 * Subscribers to the given source will receive all notifications of the source from the
 	 * time of the subscription forward.
-	 * @return {Observable} an Observable that emits the results of invoking the selector
+	 * @return {Observable} An Observable that emits the results of invoking the selector
 	 * on the items emitted by a `ConnectableObservable` that shares a single subscription to
 	 * the underlying stream.
 	 * @method multicast
@@ -34249,7 +35036,7 @@
 	//# sourceMappingURL=multicast.js.map
 
 /***/ },
-/* 406 */
+/* 407 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -34416,24 +35203,14 @@
 	//# sourceMappingURL=ConnectableObservable.js.map
 
 /***/ },
-/* 407 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var observeOn_1 = __webpack_require__(234);
-	Observable_1.Observable.prototype.observeOn = observeOn_1.observeOn;
-	//# sourceMappingURL=observeOn.js.map
-
-/***/ },
 /* 408 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var onErrorResumeNext_1 = __webpack_require__(270);
-	Observable_1.Observable.prototype.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
-	//# sourceMappingURL=onErrorResumeNext.js.map
+	var observeOn_1 = __webpack_require__(235);
+	Observable_1.Observable.prototype.observeOn = observeOn_1.observeOn;
+	//# sourceMappingURL=observeOn.js.map
 
 /***/ },
 /* 409 */
@@ -34441,12 +35218,22 @@
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var pairwise_1 = __webpack_require__(410);
+	var onErrorResumeNext_1 = __webpack_require__(271);
+	Observable_1.Observable.prototype.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
+	//# sourceMappingURL=onErrorResumeNext.js.map
+
+/***/ },
+/* 410 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var pairwise_1 = __webpack_require__(411);
 	Observable_1.Observable.prototype.pairwise = pairwise_1.pairwise;
 	//# sourceMappingURL=pairwise.js.map
 
 /***/ },
-/* 410 */
+/* 411 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -34528,22 +35315,22 @@
 	//# sourceMappingURL=pairwise.js.map
 
 /***/ },
-/* 411 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var partition_1 = __webpack_require__(412);
-	Observable_1.Observable.prototype.partition = partition_1.partition;
-	//# sourceMappingURL=partition.js.map
-
-/***/ },
 /* 412 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var not_1 = __webpack_require__(413);
-	var filter_1 = __webpack_require__(359);
+	var Observable_1 = __webpack_require__(181);
+	var partition_1 = __webpack_require__(413);
+	Observable_1.Observable.prototype.partition = partition_1.partition;
+	//# sourceMappingURL=partition.js.map
+
+/***/ },
+/* 413 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var not_1 = __webpack_require__(414);
+	var filter_1 = __webpack_require__(360);
 	/**
 	 * Splits the source Observable into two, one with values that satisfy a
 	 * predicate, and another with values that don't satisfy the predicate.
@@ -34595,7 +35382,7 @@
 	//# sourceMappingURL=partition.js.map
 
 /***/ },
-/* 413 */
+/* 414 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -34611,21 +35398,21 @@
 	//# sourceMappingURL=not.js.map
 
 /***/ },
-/* 414 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var pluck_1 = __webpack_require__(415);
-	Observable_1.Observable.prototype.pluck = pluck_1.pluck;
-	//# sourceMappingURL=pluck.js.map
-
-/***/ },
 /* 415 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var map_1 = __webpack_require__(293);
+	var Observable_1 = __webpack_require__(181);
+	var pluck_1 = __webpack_require__(416);
+	Observable_1.Observable.prototype.pluck = pluck_1.pluck;
+	//# sourceMappingURL=pluck.js.map
+
+/***/ },
+/* 416 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var map_1 = __webpack_require__(294);
 	/**
 	 * Maps each source value (an object) to its specified nested property.
 	 *
@@ -34648,8 +35435,7 @@
 	 *
 	 * @param {...string} properties The nested properties to pluck from each source
 	 * value (an object).
-	 * @return {Observable} Returns a new Observable of property values from the
-	 * source values.
+	 * @return {Observable} A new Observable of property values from the source values.
 	 * @method pluck
 	 * @owner Observable
 	 */
@@ -34684,33 +35470,33 @@
 	//# sourceMappingURL=pluck.js.map
 
 /***/ },
-/* 416 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var publish_1 = __webpack_require__(417);
-	Observable_1.Observable.prototype.publish = publish_1.publish;
-	//# sourceMappingURL=publish.js.map
-
-/***/ },
 /* 417 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var publish_1 = __webpack_require__(418);
+	Observable_1.Observable.prototype.publish = publish_1.publish;
+	//# sourceMappingURL=publish.js.map
+
+/***/ },
+/* 418 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
 	var Subject_1 = __webpack_require__(180);
-	var multicast_1 = __webpack_require__(405);
-	/* tslint:disable:max-line-length */
+	var multicast_1 = __webpack_require__(406);
+	/* tslint:enable:max-line-length */
 	/**
 	 * Returns a ConnectableObservable, which is a variety of Observable that waits until its connect method is called
 	 * before it begins emitting items to those Observers that have subscribed to it.
 	 *
 	 * <img src="./img/publish.png" width="100%">
 	 *
-	 * @param {Function} Optional selector function which can use the multicasted source sequence as many times as needed,
-	 * without causing multiple subscriptions to the source sequence.
+	 * @param {Function} [selector] - Optional selector function which can use the multicasted source sequence as many times
+	 * as needed, without causing multiple subscriptions to the source sequence.
 	 * Subscribers to the given source will receive all notifications of the source from the time of the subscription on.
-	 * @return a ConnectableObservable that upon connection causes the source Observable to emit items to its Observers.
+	 * @return A ConnectableObservable that upon connection causes the source Observable to emit items to its Observers.
 	 * @method publish
 	 * @owner Observable
 	 */
@@ -34722,22 +35508,22 @@
 	//# sourceMappingURL=publish.js.map
 
 /***/ },
-/* 418 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var publishBehavior_1 = __webpack_require__(419);
-	Observable_1.Observable.prototype.publishBehavior = publishBehavior_1.publishBehavior;
-	//# sourceMappingURL=publishBehavior.js.map
-
-/***/ },
 /* 419 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var BehaviorSubject_1 = __webpack_require__(420);
-	var multicast_1 = __webpack_require__(405);
+	var Observable_1 = __webpack_require__(181);
+	var publishBehavior_1 = __webpack_require__(420);
+	Observable_1.Observable.prototype.publishBehavior = publishBehavior_1.publishBehavior;
+	//# sourceMappingURL=publishBehavior.js.map
+
+/***/ },
+/* 420 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var BehaviorSubject_1 = __webpack_require__(421);
+	var multicast_1 = __webpack_require__(406);
 	/**
 	 * @param value
 	 * @return {ConnectableObservable<T>}
@@ -34751,7 +35537,7 @@
 	//# sourceMappingURL=publishBehavior.js.map
 
 /***/ },
-/* 420 */
+/* 421 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -34805,22 +35591,22 @@
 	//# sourceMappingURL=BehaviorSubject.js.map
 
 /***/ },
-/* 421 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var publishReplay_1 = __webpack_require__(422);
-	Observable_1.Observable.prototype.publishReplay = publishReplay_1.publishReplay;
-	//# sourceMappingURL=publishReplay.js.map
-
-/***/ },
 /* 422 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var ReplaySubject_1 = __webpack_require__(297);
-	var multicast_1 = __webpack_require__(405);
+	var Observable_1 = __webpack_require__(181);
+	var publishReplay_1 = __webpack_require__(423);
+	Observable_1.Observable.prototype.publishReplay = publishReplay_1.publishReplay;
+	//# sourceMappingURL=publishReplay.js.map
+
+/***/ },
+/* 423 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var ReplaySubject_1 = __webpack_require__(298);
+	var multicast_1 = __webpack_require__(406);
 	/**
 	 * @param bufferSize
 	 * @param windowTime
@@ -34838,22 +35624,22 @@
 	//# sourceMappingURL=publishReplay.js.map
 
 /***/ },
-/* 423 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var publishLast_1 = __webpack_require__(424);
-	Observable_1.Observable.prototype.publishLast = publishLast_1.publishLast;
-	//# sourceMappingURL=publishLast.js.map
-
-/***/ },
 /* 424 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var publishLast_1 = __webpack_require__(425);
+	Observable_1.Observable.prototype.publishLast = publishLast_1.publishLast;
+	//# sourceMappingURL=publishLast.js.map
+
+/***/ },
+/* 425 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
 	var AsyncSubject_1 = __webpack_require__(200);
-	var multicast_1 = __webpack_require__(405);
+	var multicast_1 = __webpack_require__(406);
 	/**
 	 * @return {ConnectableObservable<T>}
 	 * @method publishLast
@@ -34866,24 +35652,14 @@
 	//# sourceMappingURL=publishLast.js.map
 
 /***/ },
-/* 425 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var race_1 = __webpack_require__(262);
-	Observable_1.Observable.prototype.race = race_1.race;
-	//# sourceMappingURL=race.js.map
-
-/***/ },
 /* 426 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var reduce_1 = __webpack_require__(395);
-	Observable_1.Observable.prototype.reduce = reduce_1.reduce;
-	//# sourceMappingURL=reduce.js.map
+	var race_1 = __webpack_require__(263);
+	Observable_1.Observable.prototype.race = race_1.race;
+	//# sourceMappingURL=race.js.map
 
 /***/ },
 /* 427 */
@@ -34891,12 +35667,22 @@
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var repeat_1 = __webpack_require__(428);
+	var reduce_1 = __webpack_require__(396);
+	Observable_1.Observable.prototype.reduce = reduce_1.reduce;
+	//# sourceMappingURL=reduce.js.map
+
+/***/ },
+/* 428 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var repeat_1 = __webpack_require__(429);
 	Observable_1.Observable.prototype.repeat = repeat_1.repeat;
 	//# sourceMappingURL=repeat.js.map
 
 /***/ },
-/* 428 */
+/* 429 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -34908,15 +35694,13 @@
 	var Subscriber_1 = __webpack_require__(184);
 	var EmptyObservable_1 = __webpack_require__(209);
 	/**
-	 * Returns an Observable that repeats the stream of items emitted by the source Observable at most count times,
-	 * on a particular Scheduler.
+	 * Returns an Observable that repeats the stream of items emitted by the source Observable at most count times.
 	 *
 	 * <img src="./img/repeat.png" width="100%">
 	 *
-	 * @param {Scheduler} [scheduler] the Scheduler to emit the items on.
-	 * @param {number} [count] the number of times the source Observable items are repeated, a count of 0 will yield
+	 * @param {number} [count] The number of times the source Observable items are repeated, a count of 0 will yield
 	 * an empty Observable.
-	 * @return {Observable} an Observable that repeats the stream of items emitted by the source Observable at most
+	 * @return {Observable} An Observable that repeats the stream of items emitted by the source Observable at most
 	 * count times.
 	 * @method repeat
 	 * @owner Observable
@@ -34965,10 +35749,7 @@
 	            else if (count > -1) {
 	                this.count = count - 1;
 	            }
-	            this.unsubscribe();
-	            this.isStopped = false;
-	            this.closed = false;
-	            source.subscribe(this);
+	            source.subscribe(this._unsubscribeAndRecycle());
 	        }
 	    };
 	    return RepeatSubscriber;
@@ -34976,17 +35757,17 @@
 	//# sourceMappingURL=repeat.js.map
 
 /***/ },
-/* 429 */
+/* 430 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var repeatWhen_1 = __webpack_require__(430);
+	var repeatWhen_1 = __webpack_require__(431);
 	Observable_1.Observable.prototype.repeatWhen = repeatWhen_1.repeatWhen;
 	//# sourceMappingURL=repeatWhen.js.map
 
 /***/ },
-/* 430 */
+/* 431 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35001,32 +35782,29 @@
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
 	/**
-	 * Returns an Observable that emits the same values as the source observable with the exception of a `complete`.
-	 * A `complete` will cause the emission of the Throwable that cause the complete to the Observable returned from
-	 * notificationHandler. If that Observable calls onComplete or `complete` then retry will call `complete` or `error`
-	 * on the child subscription. Otherwise, this Observable will resubscribe to the source observable, on a particular
-	 * Scheduler.
+	 * Returns an Observable that mirrors the source Observable with the exception of a `complete`. If the source
+	 * Observable calls `complete`, this method will emit to the Observable returned from `notifier`. If that Observable
+	 * calls `complete` or `error`, then this method will call `complete` or `error` on the child subscription. Otherwise
+	 * this method will resubscribe to the source Observable.
 	 *
 	 * <img src="./img/repeatWhen.png" width="100%">
 	 *
-	 * @param {notificationHandler} receives an Observable of notifications with which a user can `complete` or `error`,
-	 * aborting the retry.
-	 * @param {scheduler} the Scheduler on which to subscribe to the source Observable.
-	 * @return {Observable} the source Observable modified with retry logic.
+	 * @param {function(notifications: Observable): Observable} notifier - Receives an Observable of notifications with
+	 * which a user can `complete` or `error`, aborting the repetition.
+	 * @return {Observable} The source Observable modified with repeat logic.
 	 * @method repeatWhen
 	 * @owner Observable
 	 */
 	function repeatWhen(notifier) {
-	    return this.lift(new RepeatWhenOperator(notifier, this));
+	    return this.lift(new RepeatWhenOperator(notifier));
 	}
 	exports.repeatWhen = repeatWhen;
 	var RepeatWhenOperator = (function () {
-	    function RepeatWhenOperator(notifier, source) {
+	    function RepeatWhenOperator(notifier) {
 	        this.notifier = notifier;
-	        this.source = source;
 	    }
 	    RepeatWhenOperator.prototype.call = function (subscriber, source) {
-	        return source.subscribe(new RepeatWhenSubscriber(subscriber, this.notifier, this.source));
+	        return source.subscribe(new RepeatWhenSubscriber(subscriber, this.notifier, source));
 	    };
 	    return RepeatWhenOperator;
 	}());
@@ -35041,30 +35819,28 @@
 	        _super.call(this, destination);
 	        this.notifier = notifier;
 	        this.source = source;
+	        this.sourceIsBeingSubscribedTo = true;
 	    }
+	    RepeatWhenSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
+	        this.sourceIsBeingSubscribedTo = true;
+	        this.source.subscribe(this);
+	    };
+	    RepeatWhenSubscriber.prototype.notifyComplete = function (innerSub) {
+	        if (this.sourceIsBeingSubscribedTo === false) {
+	            return _super.prototype.complete.call(this);
+	        }
+	    };
 	    RepeatWhenSubscriber.prototype.complete = function () {
+	        this.sourceIsBeingSubscribedTo = false;
 	        if (!this.isStopped) {
-	            var notifications = this.notifications;
-	            var retries = this.retries;
-	            var retriesSubscription = this.retriesSubscription;
-	            if (!retries) {
-	                notifications = new Subject_1.Subject();
-	                retries = tryCatch_1.tryCatch(this.notifier)(notifications);
-	                if (retries === errorObject_1.errorObject) {
-	                    return _super.prototype.complete.call(this);
-	                }
-	                retriesSubscription = subscribeToResult_1.subscribeToResult(this, retries);
+	            if (!this.retries) {
+	                this.subscribeToRetries();
 	            }
-	            else {
-	                this.notifications = null;
-	                this.retriesSubscription = null;
+	            else if (this.retriesSubscription.closed) {
+	                return _super.prototype.complete.call(this);
 	            }
-	            this.unsubscribe();
-	            this.closed = false;
-	            this.notifications = notifications;
-	            this.retries = retries;
-	            this.retriesSubscription = retriesSubscription;
-	            notifications.next();
+	            this._unsubscribeAndRecycle();
+	            this.notifications.next();
 	        }
 	    };
 	    RepeatWhenSubscriber.prototype._unsubscribe = function () {
@@ -35079,35 +35855,42 @@
 	        }
 	        this.retries = null;
 	    };
-	    RepeatWhenSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
+	    RepeatWhenSubscriber.prototype._unsubscribeAndRecycle = function () {
 	        var _a = this, notifications = _a.notifications, retries = _a.retries, retriesSubscription = _a.retriesSubscription;
 	        this.notifications = null;
 	        this.retries = null;
 	        this.retriesSubscription = null;
-	        this.unsubscribe();
-	        this.isStopped = false;
-	        this.closed = false;
+	        _super.prototype._unsubscribeAndRecycle.call(this);
 	        this.notifications = notifications;
 	        this.retries = retries;
 	        this.retriesSubscription = retriesSubscription;
-	        this.source.subscribe(this);
+	        return this;
+	    };
+	    RepeatWhenSubscriber.prototype.subscribeToRetries = function () {
+	        this.notifications = new Subject_1.Subject();
+	        var retries = tryCatch_1.tryCatch(this.notifier)(this.notifications);
+	        if (retries === errorObject_1.errorObject) {
+	            return _super.prototype.complete.call(this);
+	        }
+	        this.retries = retries;
+	        this.retriesSubscription = subscribeToResult_1.subscribeToResult(this, retries);
 	    };
 	    return RepeatWhenSubscriber;
 	}(OuterSubscriber_1.OuterSubscriber));
 	//# sourceMappingURL=repeatWhen.js.map
 
 /***/ },
-/* 431 */
+/* 432 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var retry_1 = __webpack_require__(432);
+	var retry_1 = __webpack_require__(433);
 	Observable_1.Observable.prototype.retry = retry_1.retry;
 	//# sourceMappingURL=retry.js.map
 
 /***/ },
-/* 432 */
+/* 433 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35118,10 +35901,9 @@
 	};
 	var Subscriber_1 = __webpack_require__(184);
 	/**
-	 * Returns an Observable that mirrors the source Observable, resubscribing to it if it calls `error` and the
-	 * predicate returns true for that specific exception and retry count.
-	 * If the source Observable calls `error`, this method will resubscribe to the source Observable for a maximum of
-	 * count resubscriptions (given as a number parameter) rather than propagating the `error` call.
+	 * Returns an Observable that mirrors the source Observable with the exception of an `error`. If the source Observable
+	 * calls `error`, this method will resubscribe to the source Observable for a maximum of `count` resubscriptions (given
+	 * as a number parameter) rather than propagating the `error` call.
 	 *
 	 * <img src="./img/retry.png" width="100%">
 	 *
@@ -35129,8 +35911,8 @@
 	 * during failed subscriptions. For example, if an Observable fails at first but emits [1, 2] then succeeds the second
 	 * time and emits: [1, 2, 3, 4, 5] then the complete stream of emissions and notifications
 	 * would be: [1, 2, 1, 2, 3, 4, 5, `complete`].
-	 * @param {number} number of retry attempts before failing.
-	 * @return {Observable} the source Observable modified with the retry logic.
+	 * @param {number} count - Number of retry attempts before failing.
+	 * @return {Observable} The source Observable modified with the retry logic.
 	 * @method retry
 	 * @owner Observable
 	 */
@@ -35170,10 +35952,7 @@
 	            else if (count > -1) {
 	                this.count = count - 1;
 	            }
-	            this.unsubscribe();
-	            this.isStopped = false;
-	            this.closed = false;
-	            source.subscribe(this);
+	            source.subscribe(this._unsubscribeAndRecycle());
 	        }
 	    };
 	    return RetrySubscriber;
@@ -35181,17 +35960,17 @@
 	//# sourceMappingURL=retry.js.map
 
 /***/ },
-/* 433 */
+/* 434 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var retryWhen_1 = __webpack_require__(434);
+	var retryWhen_1 = __webpack_require__(435);
 	Observable_1.Observable.prototype.retryWhen = retryWhen_1.retryWhen;
 	//# sourceMappingURL=retryWhen.js.map
 
 /***/ },
-/* 434 */
+/* 435 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35206,18 +35985,16 @@
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
 	/**
-	 * Returns an Observable that emits the same values as the source observable with the exception of an `error`.
-	 * An `error` will cause the emission of the Throwable that cause the error to the Observable returned from
-	 * notificationHandler. If that Observable calls onComplete or `error` then retry will call `complete` or `error`
-	 * on the child subscription. Otherwise, this Observable will resubscribe to the source observable, on a particular
-	 * Scheduler.
+	 * Returns an Observable that mirrors the source Observable with the exception of an `error`. If the source Observable
+	 * calls `error`, this method will emit the Throwable that caused the error to the Observable returned from `notifier`.
+	 * If that Observable calls `complete` or `error` then this method will call `complete` or `error` on the child
+	 * subscription. Otherwise this method will resubscribe to the source Observable.
 	 *
 	 * <img src="./img/retryWhen.png" width="100%">
 	 *
-	 * @param {notificationHandler} receives an Observable of notifications with which a user can `complete` or `error`,
-	 * aborting the retry.
-	 * @param {scheduler} the Scheduler on which to subscribe to the source Observable.
-	 * @return {Observable} the source Observable modified with retry logic.
+	 * @param {function(errors: Observable): Observable} notifier - Receives an Observable of notifications with which a
+	 * user can `complete` or `error`, aborting the retry.
+	 * @return {Observable} The source Observable modified with retry logic.
 	 * @method retryWhen
 	 * @owner Observable
 	 */
@@ -35264,8 +36041,7 @@
 	                this.errors = null;
 	                this.retriesSubscription = null;
 	            }
-	            this.unsubscribe();
-	            this.closed = false;
+	            this._unsubscribeAndRecycle();
 	            this.errors = errors;
 	            this.retries = retries;
 	            this.retriesSubscription = retriesSubscription;
@@ -35289,9 +36065,7 @@
 	        this.errors = null;
 	        this.retries = null;
 	        this.retriesSubscription = null;
-	        this.unsubscribe();
-	        this.isStopped = false;
-	        this.closed = false;
+	        this._unsubscribeAndRecycle();
 	        this.errors = errors;
 	        this.retries = retries;
 	        this.retriesSubscription = retriesSubscription;
@@ -35302,17 +36076,17 @@
 	//# sourceMappingURL=retryWhen.js.map
 
 /***/ },
-/* 435 */
+/* 436 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var sample_1 = __webpack_require__(436);
+	var sample_1 = __webpack_require__(437);
 	Observable_1.Observable.prototype.sample = sample_1.sample;
 	//# sourceMappingURL=sample.js.map
 
 /***/ },
-/* 436 */
+/* 437 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35405,17 +36179,17 @@
 	//# sourceMappingURL=sample.js.map
 
 /***/ },
-/* 437 */
+/* 438 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var sampleTime_1 = __webpack_require__(438);
+	var sampleTime_1 = __webpack_require__(439);
 	Observable_1.Observable.prototype.sampleTime = sampleTime_1.sampleTime;
 	//# sourceMappingURL=sampleTime.js.map
 
 /***/ },
-/* 438 */
+/* 439 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35425,7 +36199,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	/**
 	 * Emits the most recently emitted value from the source Observable within
 	 * periodic time intervals.
@@ -35455,7 +36229,7 @@
 	 *
 	 * @param {number} period The sampling period expressed in milliseconds or the
 	 * time unit determined internally by the optional `scheduler`.
-	 * @param {Scheduler} [scheduler=async] The {@link Scheduler} to use for
+	 * @param {Scheduler} [scheduler=async] The {@link IScheduler} to use for
 	 * managing the timers that handle the sampling.
 	 * @return {Observable<T>} An Observable that emits the results of sampling the
 	 * values emitted by the source Observable at the specified time interval.
@@ -35511,17 +36285,17 @@
 	//# sourceMappingURL=sampleTime.js.map
 
 /***/ },
-/* 439 */
+/* 440 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var scan_1 = __webpack_require__(440);
+	var scan_1 = __webpack_require__(441);
 	Observable_1.Observable.prototype.scan = scan_1.scan;
 	//# sourceMappingURL=scan.js.map
 
 /***/ },
-/* 440 */
+/* 441 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35531,7 +36305,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Applies an accumulator function over the source Observable, and returns each
 	 * intermediate result, with an optional seed value.
@@ -35645,17 +36419,17 @@
 	//# sourceMappingURL=scan.js.map
 
 /***/ },
-/* 441 */
+/* 442 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var sequenceEqual_1 = __webpack_require__(442);
+	var sequenceEqual_1 = __webpack_require__(443);
 	Observable_1.Observable.prototype.sequenceEqual = sequenceEqual_1.sequenceEqual;
 	//# sourceMappingURL=sequenceEqual.js.map
 
 /***/ },
-/* 442 */
+/* 443 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35712,10 +36486,10 @@
 	 * @see {@link zip}
 	 * @see {@link withLatestFrom}
 	 *
-	 * @param {Observable} compareTo the observable sequence to compare the source sequence to.
+	 * @param {Observable} compareTo The observable sequence to compare the source sequence to.
 	 * @param {function} [comparor] An optional function to compare each value pair
 	 * @return {Observable} An Observable of a single boolean value representing whether or not
-	 * the values emitted by both observables were equal in sequence
+	 * the values emitted by both observables were equal in sequence.
 	 * @method sequenceEqual
 	 * @owner Observable
 	 */
@@ -35824,21 +36598,21 @@
 	//# sourceMappingURL=sequenceEqual.js.map
 
 /***/ },
-/* 443 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var share_1 = __webpack_require__(444);
-	Observable_1.Observable.prototype.share = share_1.share;
-	//# sourceMappingURL=share.js.map
-
-/***/ },
 /* 444 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var multicast_1 = __webpack_require__(405);
+	var Observable_1 = __webpack_require__(181);
+	var share_1 = __webpack_require__(445);
+	Observable_1.Observable.prototype.share = share_1.share;
+	//# sourceMappingURL=share.js.map
+
+/***/ },
+/* 445 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var multicast_1 = __webpack_require__(406);
 	var Subject_1 = __webpack_require__(180);
 	function shareSubjectFactory() {
 	    return new Subject_1.Subject();
@@ -35851,7 +36625,7 @@
 	 *
 	 * <img src="./img/share.png" width="100%">
 	 *
-	 * @return {Observable<T>} an Observable that upon connection causes the source Observable to emit items to its Observers
+	 * @return {Observable<T>} An Observable that upon connection causes the source Observable to emit items to its Observers.
 	 * @method share
 	 * @owner Observable
 	 */
@@ -35863,17 +36637,17 @@
 	//# sourceMappingURL=share.js.map
 
 /***/ },
-/* 445 */
+/* 446 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var single_1 = __webpack_require__(446);
+	var single_1 = __webpack_require__(447);
 	Observable_1.Observable.prototype.single = single_1.single;
 	//# sourceMappingURL=single.js.map
 
 /***/ },
-/* 446 */
+/* 447 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35883,7 +36657,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var EmptyError_1 = __webpack_require__(368);
+	var EmptyError_1 = __webpack_require__(369);
 	/**
 	 * Returns an Observable that emits the single item emitted by the source Observable that matches a specified
 	 * predicate, if that Observable emits one such item. If the source Observable emits more than one such item or no
@@ -35893,8 +36667,8 @@
 	 *
 	 * @throws {EmptyError} Delivers an EmptyError to the Observer's `error`
 	 * callback if the Observable completes before any `next` notification was sent.
-	 * @param {Function} a predicate function to evaluate items emitted by the source Observable.
-	 * @return {Observable<T>} an Observable that emits the single item emitted by the source Observable that matches
+	 * @param {Function} predicate - A predicate function to evaluate items emitted by the source Observable.
+	 * @return {Observable<T>} An Observable that emits the single item emitted by the source Observable that matches
 	 * the predicate.
 	 .
 	 * @method single
@@ -35938,19 +36712,17 @@
 	        }
 	    };
 	    SingleSubscriber.prototype._next = function (value) {
-	        var predicate = this.predicate;
-	        this.index++;
-	        if (predicate) {
-	            this.tryNext(value);
+	        var index = this.index++;
+	        if (this.predicate) {
+	            this.tryNext(value, index);
 	        }
 	        else {
 	            this.applySingleValue(value);
 	        }
 	    };
-	    SingleSubscriber.prototype.tryNext = function (value) {
+	    SingleSubscriber.prototype.tryNext = function (value, index) {
 	        try {
-	            var result = this.predicate(value, this.index, this.source);
-	            if (result) {
+	            if (this.predicate(value, index, this.source)) {
 	                this.applySingleValue(value);
 	            }
 	        }
@@ -35973,17 +36745,17 @@
 	//# sourceMappingURL=single.js.map
 
 /***/ },
-/* 447 */
+/* 448 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var skip_1 = __webpack_require__(448);
+	var skip_1 = __webpack_require__(449);
 	Observable_1.Observable.prototype.skip = skip_1.skip;
 	//# sourceMappingURL=skip.js.map
 
 /***/ },
-/* 448 */
+/* 449 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -35994,18 +36766,18 @@
 	};
 	var Subscriber_1 = __webpack_require__(184);
 	/**
-	 * Returns an Observable that skips `n` items emitted by an Observable.
+	 * Returns an Observable that skips the first `count` items emitted by the source Observable.
 	 *
 	 * <img src="./img/skip.png" width="100%">
 	 *
-	 * @param {Number} the `n` of times, items emitted by source Observable should be skipped.
-	 * @return {Observable} an Observable that skips values emitted by the source Observable.
+	 * @param {Number} count - The number of times, items emitted by source Observable should be skipped.
+	 * @return {Observable} An Observable that skips values emitted by the source Observable.
 	 *
 	 * @method skip
 	 * @owner Observable
 	 */
-	function skip(total) {
-	    return this.lift(new SkipOperator(total));
+	function skip(count) {
+	    return this.lift(new SkipOperator(count));
 	}
 	exports.skip = skip;
 	var SkipOperator = (function () {
@@ -36039,17 +36811,17 @@
 	//# sourceMappingURL=skip.js.map
 
 /***/ },
-/* 449 */
+/* 450 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var skipUntil_1 = __webpack_require__(450);
+	var skipUntil_1 = __webpack_require__(451);
 	Observable_1.Observable.prototype.skipUntil = skipUntil_1.skipUntil;
 	//# sourceMappingURL=skipUntil.js.map
 
 /***/ },
-/* 450 */
+/* 451 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -36065,9 +36837,9 @@
 	 *
 	 * <img src="./img/skipUntil.png" width="100%">
 	 *
-	 * @param {Observable} the second Observable that has to emit an item before the source Observable's elements begin to
+	 * @param {Observable} notifier - The second Observable that has to emit an item before the source Observable's elements begin to
 	 * be mirrored by the resulting Observable.
-	 * @return {Observable<T>} an Observable that skips items from the source Observable until the second Observable emits
+	 * @return {Observable<T>} An Observable that skips items from the source Observable until the second Observable emits
 	 * an item, then emits the remaining items.
 	 * @method skipUntil
 	 * @owner Observable
@@ -36125,17 +36897,17 @@
 	//# sourceMappingURL=skipUntil.js.map
 
 /***/ },
-/* 451 */
+/* 452 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var skipWhile_1 = __webpack_require__(452);
+	var skipWhile_1 = __webpack_require__(453);
 	Observable_1.Observable.prototype.skipWhile = skipWhile_1.skipWhile;
 	//# sourceMappingURL=skipWhile.js.map
 
 /***/ },
-/* 452 */
+/* 453 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -36151,8 +36923,8 @@
 	 *
 	 * <img src="./img/skipWhile.png" width="100%">
 	 *
-	 * @param {Function} predicate - a function to test each item emitted from the source Observable.
-	 * @return {Observable<T>} an Observable that begins emitting items emitted by the source Observable when the
+	 * @param {Function} predicate - A function to test each item emitted from the source Observable.
+	 * @return {Observable<T>} An Observable that begins emitting items emitted by the source Observable when the
 	 * specified predicate becomes false.
 	 * @method skipWhile
 	 * @owner Observable
@@ -36206,34 +36978,36 @@
 	//# sourceMappingURL=skipWhile.js.map
 
 /***/ },
-/* 453 */
+/* 454 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var startWith_1 = __webpack_require__(454);
+	var startWith_1 = __webpack_require__(455);
 	Observable_1.Observable.prototype.startWith = startWith_1.startWith;
 	//# sourceMappingURL=startWith.js.map
 
 /***/ },
-/* 454 */
+/* 455 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var ArrayObservable_1 = __webpack_require__(207);
 	var ScalarObservable_1 = __webpack_require__(208);
 	var EmptyObservable_1 = __webpack_require__(209);
-	var concat_1 = __webpack_require__(218);
+	var concat_1 = __webpack_require__(219);
 	var isScheduler_1 = __webpack_require__(206);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
-	 * Returns an Observable that emits the items in a specified Iterable before it begins to emit items emitted by the
-	 * source Observable.
+	 * Returns an Observable that emits the items you specify as arguments before it begins to emit
+	 * items emitted by the source Observable.
 	 *
 	 * <img src="./img/startWith.png" width="100%">
 	 *
-	 * @param {Values} an Iterable that contains the items you want the modified Observable to emit first.
-	 * @return {Observable} an Observable that emits the items in the specified Iterable and then emits the items
+	 * @param {...T} values - Items you want the modified Observable to emit first.
+	 * @param {Scheduler} [scheduler] - A {@link IScheduler} to use for scheduling
+	 * the emissions of the `next` notifications.
+	 * @return {Observable} An Observable that emits the items in the specified Iterable and then emits the items
 	 * emitted by the source Observable.
 	 * @method startWith
 	 * @owner Observable
@@ -36265,28 +37039,28 @@
 	//# sourceMappingURL=startWith.js.map
 
 /***/ },
-/* 455 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var subscribeOn_1 = __webpack_require__(456);
-	Observable_1.Observable.prototype.subscribeOn = subscribeOn_1.subscribeOn;
-	//# sourceMappingURL=subscribeOn.js.map
-
-/***/ },
 /* 456 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var SubscribeOnObservable_1 = __webpack_require__(457);
+	var Observable_1 = __webpack_require__(181);
+	var subscribeOn_1 = __webpack_require__(457);
+	Observable_1.Observable.prototype.subscribeOn = subscribeOn_1.subscribeOn;
+	//# sourceMappingURL=subscribeOn.js.map
+
+/***/ },
+/* 457 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var SubscribeOnObservable_1 = __webpack_require__(458);
 	/**
-	 * Asynchronously subscribes Observers to this Observable on the specified Scheduler.
+	 * Asynchronously subscribes Observers to this Observable on the specified IScheduler.
 	 *
 	 * <img src="./img/subscribeOn.png" width="100%">
 	 *
-	 * @param {Scheduler} the Scheduler to perform subscription actions on.
-	 * @return {Observable<T>} the source Observable modified so that its subscriptions happen on the specified Scheduler
+	 * @param {Scheduler} scheduler - The IScheduler to perform subscription actions on.
+	 * @return {Observable<T>} The source Observable modified so that its subscriptions happen on the specified IScheduler.
 	 .
 	 * @method subscribeOn
 	 * @owner Observable
@@ -36309,7 +37083,7 @@
 	//# sourceMappingURL=subscribeOn.js.map
 
 /***/ },
-/* 457 */
+/* 458 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -36319,8 +37093,8 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Observable_1 = __webpack_require__(181);
-	var asap_1 = __webpack_require__(458);
-	var isNumeric_1 = __webpack_require__(252);
+	var asap_1 = __webpack_require__(459);
+	var isNumeric_1 = __webpack_require__(253);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @extends {Ignored}
@@ -36365,17 +37139,51 @@
 	//# sourceMappingURL=SubscribeOnObservable.js.map
 
 /***/ },
-/* 458 */
+/* 459 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var AsapAction_1 = __webpack_require__(459);
-	var AsapScheduler_1 = __webpack_require__(463);
+	var AsapAction_1 = __webpack_require__(460);
+	var AsapScheduler_1 = __webpack_require__(464);
+	/**
+	 *
+	 * Asap Scheduler
+	 *
+	 * <span class="informal">Perform task as fast as it can be performed asynchronously</span>
+	 *
+	 * `asap` scheduler behaves the same as {@link async} scheduler when you use it to delay task
+	 * in time. If however you set delay to `0`, `asap` will wait for current synchronously executing
+	 * code to end and then it will try to execute given task as fast as possible.
+	 *
+	 * `asap` scheduler will do its best to minimize time between end of currently executing code
+	 * and start of scheduled task. This makes it best candidate for performing so called "deferring".
+	 * Traditionally this was achieved by calling `setTimeout(deferredTask, 0)`, but that technique involves
+	 * some (although minimal) unwanted delay.
+	 *
+	 * Note that using `asap` scheduler does not necessarily mean that your task will be first to process
+	 * after currently executing code. In particular, if some task was also scheduled with `asap` before,
+	 * that task will execute first. That being said, if you need to schedule task asynchronously, but
+	 * as soon as possible, `asap` scheduler is your best bet.
+	 *
+	 * @example <caption>Compare async and asap scheduler</caption>
+	 *
+	 * Rx.Scheduler.async.schedule(() => console.log('async')); // scheduling 'async' first...
+	 * Rx.Scheduler.asap.schedule(() => console.log('asap'));
+	 *
+	 * // Logs:
+	 * // "asap"
+	 * // "async"
+	 * // ... but 'asap' goes first!
+	 *
+	 * @static true
+	 * @name asap
+	 * @owner Scheduler
+	 */
 	exports.asap = new AsapScheduler_1.AsapScheduler(AsapAction_1.AsapAction);
 	//# sourceMappingURL=asap.js.map
 
 /***/ },
-/* 459 */
+/* 460 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -36384,8 +37192,8 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var Immediate_1 = __webpack_require__(460);
-	var AsyncAction_1 = __webpack_require__(254);
+	var Immediate_1 = __webpack_require__(461);
+	var AsyncAction_1 = __webpack_require__(255);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -36435,7 +37243,7 @@
 	//# sourceMappingURL=AsapAction.js.map
 
 /***/ },
-/* 460 */
+/* 461 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(clearImmediate, setImmediate) {/**
@@ -36647,10 +37455,10 @@
 	exports.ImmediateDefinition = ImmediateDefinition;
 	exports.Immediate = new ImmediateDefinition(root_1.root);
 	//# sourceMappingURL=Immediate.js.map
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(461).clearImmediate, __webpack_require__(461).setImmediate))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(462).clearImmediate, __webpack_require__(462).setImmediate))
 
 /***/ },
-/* 461 */
+/* 462 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var apply = Function.prototype.apply;
@@ -36703,13 +37511,13 @@
 	};
 
 	// setimmediate attaches itself to the global object
-	__webpack_require__(462);
+	__webpack_require__(463);
 	exports.setImmediate = setImmediate;
 	exports.clearImmediate = clearImmediate;
 
 
 /***/ },
-/* 462 */
+/* 463 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global, process) {(function (global, undefined) {
@@ -36902,7 +37710,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(3)))
 
 /***/ },
-/* 463 */
+/* 464 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -36911,7 +37719,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var AsyncScheduler_1 = __webpack_require__(256);
+	var AsyncScheduler_1 = __webpack_require__(257);
 	var AsapScheduler = (function (_super) {
 	    __extends(AsapScheduler, _super);
 	    function AsapScheduler() {
@@ -36944,18 +37752,18 @@
 	//# sourceMappingURL=AsapScheduler.js.map
 
 /***/ },
-/* 464 */
+/* 465 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var switch_1 = __webpack_require__(465);
+	var switch_1 = __webpack_require__(466);
 	Observable_1.Observable.prototype.switch = switch_1._switch;
 	Observable_1.Observable.prototype._switch = switch_1._switch;
 	//# sourceMappingURL=switch.js.map
 
 /***/ },
-/* 465 */
+/* 466 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37068,17 +37876,17 @@
 	//# sourceMappingURL=switch.js.map
 
 /***/ },
-/* 466 */
+/* 467 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var switchMap_1 = __webpack_require__(467);
+	var switchMap_1 = __webpack_require__(468);
 	Observable_1.Observable.prototype.switchMap = switchMap_1.switchMap;
 	//# sourceMappingURL=switchMap.js.map
 
 /***/ },
-/* 467 */
+/* 468 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37089,7 +37897,7 @@
 	};
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to an Observable which is merged in the output
 	 * Observable, emitting values only from the most recently projected Observable.
@@ -37119,7 +37927,7 @@
 	 * @see {@link switch}
 	 * @see {@link switchMapTo}
 	 *
-	 * @param {function(value: T, ?index: number): Observable} project A function
+	 * @param {function(value: T, ?index: number): ObservableInput} project A function
 	 * that, when applied to an item emitted by the source Observable, returns an
 	 * Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
@@ -37223,17 +38031,17 @@
 	//# sourceMappingURL=switchMap.js.map
 
 /***/ },
-/* 468 */
+/* 469 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var switchMapTo_1 = __webpack_require__(469);
+	var switchMapTo_1 = __webpack_require__(470);
 	Observable_1.Observable.prototype.switchMapTo = switchMapTo_1.switchMapTo;
 	//# sourceMappingURL=switchMapTo.js.map
 
 /***/ },
-/* 469 */
+/* 470 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37244,7 +38052,7 @@
 	};
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Projects each source value to the same Observable which is flattened multiple
 	 * times with {@link switch} in the output Observable.
@@ -37270,7 +38078,7 @@
 	 * @see {@link switchMap}
 	 * @see {@link mergeMapTo}
 	 *
-	 * @param {Observable} innerObservable An Observable to replace each value from
+	 * @param {ObservableInput} innerObservable An Observable to replace each value from
 	 * the source Observable.
 	 * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
 	 * A function to produce the value on the output Observable based on the values
@@ -37280,8 +38088,6 @@
 	 * - `innerValue`: the value that came from the projected Observable
 	 * - `outerIndex`: the "index" of the value that came from the source
 	 * - `innerIndex`: the "index" of the value from the projected Observable
-	 * @return {Observable} An Observable that emits items from the given
-	 * `innerObservable` every time a value is emitted on the source Observable.
 	 * @return {Observable} An Observable that emits items from the given
 	 * `innerObservable` (and optionally transformed through `resultSelector`) every
 	 * time a value is emitted on the source Observable, and taking only the values
@@ -37365,17 +38171,17 @@
 	//# sourceMappingURL=switchMapTo.js.map
 
 /***/ },
-/* 470 */
+/* 471 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var take_1 = __webpack_require__(471);
+	var take_1 = __webpack_require__(472);
 	Observable_1.Observable.prototype.take = take_1.take;
 	//# sourceMappingURL=take.js.map
 
 /***/ },
-/* 471 */
+/* 472 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37385,7 +38191,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var ArgumentOutOfRangeError_1 = __webpack_require__(357);
+	var ArgumentOutOfRangeError_1 = __webpack_require__(358);
 	var EmptyObservable_1 = __webpack_require__(209);
 	/**
 	 * Emits only the first `count` values emitted by the source Observable.
@@ -37469,17 +38275,17 @@
 	//# sourceMappingURL=take.js.map
 
 /***/ },
-/* 472 */
+/* 473 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var takeLast_1 = __webpack_require__(473);
+	var takeLast_1 = __webpack_require__(474);
 	Observable_1.Observable.prototype.takeLast = takeLast_1.takeLast;
 	//# sourceMappingURL=takeLast.js.map
 
 /***/ },
-/* 473 */
+/* 474 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37489,7 +38295,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var ArgumentOutOfRangeError_1 = __webpack_require__(357);
+	var ArgumentOutOfRangeError_1 = __webpack_require__(358);
 	var EmptyObservable_1 = __webpack_require__(209);
 	/**
 	 * Emits only the last `count` values emitted by the source Observable.
@@ -37591,17 +38397,17 @@
 	//# sourceMappingURL=takeLast.js.map
 
 /***/ },
-/* 474 */
+/* 475 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var takeUntil_1 = __webpack_require__(475);
+	var takeUntil_1 = __webpack_require__(476);
 	Observable_1.Observable.prototype.takeUntil = takeUntil_1.takeUntil;
 	//# sourceMappingURL=takeUntil.js.map
 
 /***/ },
-/* 475 */
+/* 476 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37681,17 +38487,17 @@
 	//# sourceMappingURL=takeUntil.js.map
 
 /***/ },
-/* 476 */
+/* 477 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var takeWhile_1 = __webpack_require__(477);
+	var takeWhile_1 = __webpack_require__(478);
 	Observable_1.Observable.prototype.takeWhile = takeWhile_1.takeWhile;
 	//# sourceMappingURL=takeWhile.js.map
 
 /***/ },
-/* 477 */
+/* 478 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37788,17 +38594,17 @@
 	//# sourceMappingURL=takeWhile.js.map
 
 /***/ },
-/* 478 */
+/* 479 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var throttle_1 = __webpack_require__(479);
+	var throttle_1 = __webpack_require__(480);
 	Observable_1.Observable.prototype.throttle = throttle_1.throttle;
 	//# sourceMappingURL=throttle.js.map
 
 /***/ },
-/* 479 */
+/* 480 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37839,7 +38645,7 @@
 	 * @see {@link sample}
 	 * @see {@link throttleTime}
 	 *
-	 * @param {function(value: T): Observable|Promise} durationSelector A function
+	 * @param {function(value: T): SubscribableOrPromise} durationSelector A function
 	 * that receives a value from the source Observable, for computing the silencing
 	 * duration for each source value, returned as an Observable or a Promise.
 	 * @return {Observable<T>} An Observable that performs the throttle operation to
@@ -37911,17 +38717,17 @@
 	//# sourceMappingURL=throttle.js.map
 
 /***/ },
-/* 480 */
+/* 481 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var throttleTime_1 = __webpack_require__(481);
+	var throttleTime_1 = __webpack_require__(482);
 	Observable_1.Observable.prototype.throttleTime = throttleTime_1.throttleTime;
 	//# sourceMappingURL=throttleTime.js.map
 
 /***/ },
-/* 481 */
+/* 482 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -37931,7 +38737,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	/**
 	 * Emits a value from the source Observable, then ignores subsequent source
 	 * values for `duration` milliseconds, then repeats this process.
@@ -37948,7 +38754,7 @@
 	 * is enabled. After `duration` milliseconds (or the time unit determined
 	 * internally by the optional `scheduler`) has passed, the timer is disabled,
 	 * and this process repeats for the next source value. Optionally takes a
-	 * {@link Scheduler} for managing timers.
+	 * {@link IScheduler} for managing timers.
 	 *
 	 * @example <caption>Emit clicks at a rate of at most one click per second</caption>
 	 * var clicks = Rx.Observable.fromEvent(document, 'click');
@@ -37964,7 +38770,7 @@
 	 * @param {number} duration Time to wait before emitting another value after
 	 * emitting the last value, measured in milliseconds or the time unit determined
 	 * internally by the optional `scheduler`.
-	 * @param {Scheduler} [scheduler=async] The {@link Scheduler} to use for
+	 * @param {Scheduler} [scheduler=async] The {@link IScheduler} to use for
 	 * managing the timers that handle the sampling.
 	 * @return {Observable<T>} An Observable that performs the throttle operation to
 	 * limit the rate of emissions from the source.
@@ -38021,17 +38827,17 @@
 	//# sourceMappingURL=throttleTime.js.map
 
 /***/ },
-/* 482 */
+/* 483 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var timeInterval_1 = __webpack_require__(483);
+	var timeInterval_1 = __webpack_require__(484);
 	Observable_1.Observable.prototype.timeInterval = timeInterval_1.timeInterval;
 	//# sourceMappingURL=timeInterval.js.map
 
 /***/ },
-/* 483 */
+/* 484 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38041,7 +38847,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	/**
 	 * @param scheduler
 	 * @return {Observable<TimeInterval<any>>|WebSocketSubject<T>|Observable<T>}
@@ -38095,17 +38901,17 @@
 	//# sourceMappingURL=timeInterval.js.map
 
 /***/ },
-/* 484 */
+/* 485 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var timeout_1 = __webpack_require__(485);
+	var timeout_1 = __webpack_require__(486);
 	Observable_1.Observable.prototype.timeout = timeout_1.timeout;
 	//# sourceMappingURL=timeout.js.map
 
 /***/ },
-/* 485 */
+/* 486 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38114,10 +38920,10 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var async_1 = __webpack_require__(253);
-	var isDate_1 = __webpack_require__(286);
+	var async_1 = __webpack_require__(254);
+	var isDate_1 = __webpack_require__(287);
 	var Subscriber_1 = __webpack_require__(184);
-	var TimeoutError_1 = __webpack_require__(486);
+	var TimeoutError_1 = __webpack_require__(487);
 	/**
 	 * @param {number} due
 	 * @param {Scheduler} [scheduler]
@@ -38211,7 +39017,7 @@
 	//# sourceMappingURL=timeout.js.map
 
 /***/ },
-/* 486 */
+/* 487 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -38241,17 +39047,17 @@
 	//# sourceMappingURL=TimeoutError.js.map
 
 /***/ },
-/* 487 */
+/* 488 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var timeoutWith_1 = __webpack_require__(488);
+	var timeoutWith_1 = __webpack_require__(489);
 	Observable_1.Observable.prototype.timeoutWith = timeoutWith_1.timeoutWith;
 	//# sourceMappingURL=timeoutWith.js.map
 
 /***/ },
-/* 488 */
+/* 489 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38260,11 +39066,11 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var async_1 = __webpack_require__(253);
-	var isDate_1 = __webpack_require__(286);
+	var async_1 = __webpack_require__(254);
+	var isDate_1 = __webpack_require__(287);
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * @param due
 	 * @param withObservable
@@ -38367,17 +39173,17 @@
 	//# sourceMappingURL=timeoutWith.js.map
 
 /***/ },
-/* 489 */
+/* 490 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var timestamp_1 = __webpack_require__(490);
+	var timestamp_1 = __webpack_require__(491);
 	Observable_1.Observable.prototype.timestamp = timestamp_1.timestamp;
 	//# sourceMappingURL=timestamp.js.map
 
 /***/ },
-/* 490 */
+/* 491 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38387,7 +39193,7 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subscriber_1 = __webpack_require__(184);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	/**
 	 * @param scheduler
 	 * @return {Observable<Timestamp<any>>|WebSocketSubject<T>|Observable<T>}
@@ -38432,17 +39238,17 @@
 	//# sourceMappingURL=timestamp.js.map
 
 /***/ },
-/* 491 */
+/* 492 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var toArray_1 = __webpack_require__(492);
+	var toArray_1 = __webpack_require__(493);
 	Observable_1.Observable.prototype.toArray = toArray_1.toArray;
 	//# sourceMappingURL=toArray.js.map
 
 /***/ },
-/* 492 */
+/* 493 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38492,25 +39298,68 @@
 	//# sourceMappingURL=toArray.js.map
 
 /***/ },
-/* 493 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var toPromise_1 = __webpack_require__(494);
-	Observable_1.Observable.prototype.toPromise = toPromise_1.toPromise;
-	//# sourceMappingURL=toPromise.js.map
-
-/***/ },
 /* 494 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var Observable_1 = __webpack_require__(181);
+	var toPromise_1 = __webpack_require__(495);
+	Observable_1.Observable.prototype.toPromise = toPromise_1.toPromise;
+	//# sourceMappingURL=toPromise.js.map
+
+/***/ },
+/* 495 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
 	var root_1 = __webpack_require__(182);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
-	 * @param PromiseCtor
-	 * @return {Promise<T>}
+	 * Converts an Observable sequence to a ES2015 compliant promise.
+	 *
+	 * @example
+	 * // Using normal ES2015
+	 * let source = Rx.Observable
+	 *   .just(42)
+	 *   .toPromise();
+	 *
+	 * source.then((value) => console.log('Value: %s', value));
+	 * // => Value: 42
+	 *
+	 * // Rejected Promise
+	 * // Using normal ES2015
+	 * let source = Rx.Observable
+	 *   .throw(new Error('woops'))
+	 *   .toPromise();
+	 *
+	 * source
+	 *   .then((value) => console.log('Value: %s', value))
+	 *   .catch((err) => console.log('Error: %s', err));
+	 * // => Error: Error: woops
+	 *
+	 * // Setting via the config
+	 * Rx.config.Promise = RSVP.Promise;
+	 *
+	 * let source = Rx.Observable
+	 *   .of(42)
+	 *   .toPromise();
+	 *
+	 * source.then((value) => console.log('Value: %s', value));
+	 * // => Value: 42
+	 *
+	 * // Setting via the method
+	 * let source = Rx.Observable
+	 *   .just(42)
+	 *   .toPromise(RSVP.Promise);
+	 *
+	 * source.then((value) => console.log('Value: %s', value));
+	 * // => Value: 42
+	 *
+	 * @param PromiseCtor promise The constructor of the promise. If not provided,
+	 * it will look for a constructor first in Rx.config.Promise then fall back to
+	 * the native Promise constructor if available.
+	 * @return {Promise<T>} An ES2015 compatible promise with the last value from
+	 * the observable sequence.
 	 * @method toPromise
 	 * @owner Observable
 	 */
@@ -38536,17 +39385,17 @@
 	//# sourceMappingURL=toPromise.js.map
 
 /***/ },
-/* 495 */
+/* 496 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var window_1 = __webpack_require__(496);
+	var window_1 = __webpack_require__(497);
 	Observable_1.Observable.prototype.window = window_1.window;
 	//# sourceMappingURL=window.js.map
 
 /***/ },
-/* 496 */
+/* 497 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38661,17 +39510,17 @@
 	//# sourceMappingURL=window.js.map
 
 /***/ },
-/* 497 */
+/* 498 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var windowCount_1 = __webpack_require__(498);
+	var windowCount_1 = __webpack_require__(499);
 	Observable_1.Observable.prototype.windowCount = windowCount_1.windowCount;
 	//# sourceMappingURL=windowCount.js.map
 
 /***/ },
-/* 498 */
+/* 499 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38807,17 +39656,17 @@
 	//# sourceMappingURL=windowCount.js.map
 
 /***/ },
-/* 499 */
+/* 500 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var windowTime_1 = __webpack_require__(500);
+	var windowTime_1 = __webpack_require__(501);
 	Observable_1.Observable.prototype.windowTime = windowTime_1.windowTime;
 	//# sourceMappingURL=windowTime.js.map
 
 /***/ },
-/* 500 */
+/* 501 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -38827,74 +39676,63 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Subject_1 = __webpack_require__(180);
-	var async_1 = __webpack_require__(253);
+	var async_1 = __webpack_require__(254);
 	var Subscriber_1 = __webpack_require__(184);
-	/**
-	 * Branch out the source Observable values as a nested Observable periodically
-	 * in time.
-	 *
-	 * <span class="informal">It's like {@link bufferTime}, but emits a nested
-	 * Observable instead of an array.</span>
-	 *
-	 * <img src="./img/windowTime.png" width="100%">
-	 *
-	 * Returns an Observable that emits windows of items it collects from the source
-	 * Observable. The output Observable starts a new window periodically, as
-	 * determined by the `windowCreationInterval` argument. It emits each window
-	 * after a fixed timespan, specified by the `windowTimeSpan` argument. When the
-	 * source Observable completes or encounters an error, the output Observable
-	 * emits the current window and propagates the notification from the source
-	 * Observable. If `windowCreationInterval` is not provided, the output
-	 * Observable starts a new window when the previous window of duration
-	 * `windowTimeSpan` completes.
-	 *
-	 * @example <caption>In every window of 1 second each, emit at most 2 click events</caption>
-	 * var clicks = Rx.Observable.fromEvent(document, 'click');
-	 * var result = clicks.windowTime(1000)
-	 *   .map(win => win.take(2)) // each window has at most 2 emissions
-	 *   .mergeAll(); // flatten the Observable-of-Observables
-	 * result.subscribe(x => console.log(x));
-	 *
-	 * @example <caption>Every 5 seconds start a window 1 second long, and emit at most 2 click events per window</caption>
-	 * var clicks = Rx.Observable.fromEvent(document, 'click');
-	 * var result = clicks.windowTime(1000, 5000)
-	 *   .map(win => win.take(2)) // each window has at most 2 emissions
-	 *   .mergeAll(); // flatten the Observable-of-Observables
-	 * result.subscribe(x => console.log(x));
-	 *
-	 * @see {@link window}
-	 * @see {@link windowCount}
-	 * @see {@link windowToggle}
-	 * @see {@link windowWhen}
-	 * @see {@link bufferTime}
-	 *
-	 * @param {number} windowTimeSpan The amount of time to fill each window.
-	 * @param {number} [windowCreationInterval] The interval at which to start new
-	 * windows.
-	 * @param {Scheduler} [scheduler=async] The scheduler on which to schedule the
-	 * intervals that determine window boundaries.
-	 * @return {Observable<Observable<T>>} An observable of windows, which in turn
-	 * are Observables.
-	 * @method windowTime
-	 * @owner Observable
-	 */
-	function windowTime(windowTimeSpan, windowCreationInterval, scheduler) {
-	    if (windowCreationInterval === void 0) { windowCreationInterval = null; }
-	    if (scheduler === void 0) { scheduler = async_1.async; }
-	    return this.lift(new WindowTimeOperator(windowTimeSpan, windowCreationInterval, scheduler));
+	var isNumeric_1 = __webpack_require__(253);
+	var isScheduler_1 = __webpack_require__(206);
+	function windowTime(windowTimeSpan) {
+	    var scheduler = async_1.async;
+	    var windowCreationInterval = null;
+	    var maxWindowSize = Number.POSITIVE_INFINITY;
+	    if (isScheduler_1.isScheduler(arguments[3])) {
+	        scheduler = arguments[3];
+	    }
+	    if (isScheduler_1.isScheduler(arguments[2])) {
+	        scheduler = arguments[2];
+	    }
+	    else if (isNumeric_1.isNumeric(arguments[2])) {
+	        maxWindowSize = arguments[2];
+	    }
+	    if (isScheduler_1.isScheduler(arguments[1])) {
+	        scheduler = arguments[1];
+	    }
+	    else if (isNumeric_1.isNumeric(arguments[1])) {
+	        windowCreationInterval = arguments[1];
+	    }
+	    return this.lift(new WindowTimeOperator(windowTimeSpan, windowCreationInterval, maxWindowSize, scheduler));
 	}
 	exports.windowTime = windowTime;
 	var WindowTimeOperator = (function () {
-	    function WindowTimeOperator(windowTimeSpan, windowCreationInterval, scheduler) {
+	    function WindowTimeOperator(windowTimeSpan, windowCreationInterval, maxWindowSize, scheduler) {
 	        this.windowTimeSpan = windowTimeSpan;
 	        this.windowCreationInterval = windowCreationInterval;
+	        this.maxWindowSize = maxWindowSize;
 	        this.scheduler = scheduler;
 	    }
 	    WindowTimeOperator.prototype.call = function (subscriber, source) {
-	        return source.subscribe(new WindowTimeSubscriber(subscriber, this.windowTimeSpan, this.windowCreationInterval, this.scheduler));
+	        return source.subscribe(new WindowTimeSubscriber(subscriber, this.windowTimeSpan, this.windowCreationInterval, this.maxWindowSize, this.scheduler));
 	    };
 	    return WindowTimeOperator;
 	}());
+	var CountedSubject = (function (_super) {
+	    __extends(CountedSubject, _super);
+	    function CountedSubject() {
+	        _super.apply(this, arguments);
+	        this._numberOfNextedValues = 0;
+	    }
+	    CountedSubject.prototype.next = function (value) {
+	        this._numberOfNextedValues++;
+	        _super.prototype.next.call(this, value);
+	    };
+	    Object.defineProperty(CountedSubject.prototype, "numberOfNextedValues", {
+	        get: function () {
+	            return this._numberOfNextedValues;
+	        },
+	        enumerable: true,
+	        configurable: true
+	    });
+	    return CountedSubject;
+	}(Subject_1.Subject));
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -38902,23 +39740,23 @@
 	 */
 	var WindowTimeSubscriber = (function (_super) {
 	    __extends(WindowTimeSubscriber, _super);
-	    function WindowTimeSubscriber(destination, windowTimeSpan, windowCreationInterval, scheduler) {
+	    function WindowTimeSubscriber(destination, windowTimeSpan, windowCreationInterval, maxWindowSize, scheduler) {
 	        _super.call(this, destination);
 	        this.destination = destination;
 	        this.windowTimeSpan = windowTimeSpan;
 	        this.windowCreationInterval = windowCreationInterval;
+	        this.maxWindowSize = maxWindowSize;
 	        this.scheduler = scheduler;
 	        this.windows = [];
+	        var window = this.openWindow();
 	        if (windowCreationInterval !== null && windowCreationInterval >= 0) {
-	            var window_1 = this.openWindow();
-	            var closeState = { subscriber: this, window: window_1, context: null };
+	            var closeState = { subscriber: this, window: window, context: null };
 	            var creationState = { windowTimeSpan: windowTimeSpan, windowCreationInterval: windowCreationInterval, subscriber: this, scheduler: scheduler };
 	            this.add(scheduler.schedule(dispatchWindowClose, windowTimeSpan, closeState));
 	            this.add(scheduler.schedule(dispatchWindowCreation, windowCreationInterval, creationState));
 	        }
 	        else {
-	            var window_2 = this.openWindow();
-	            var timeSpanOnlyState = { subscriber: this, window: window_2, windowTimeSpan: windowTimeSpan };
+	            var timeSpanOnlyState = { subscriber: this, window: window, windowTimeSpan: windowTimeSpan };
 	            this.add(scheduler.schedule(dispatchWindowTimeSpanOnly, windowTimeSpan, timeSpanOnlyState));
 	        }
 	    }
@@ -38926,9 +39764,12 @@
 	        var windows = this.windows;
 	        var len = windows.length;
 	        for (var i = 0; i < len; i++) {
-	            var window_3 = windows[i];
-	            if (!window_3.closed) {
-	                window_3.next(value);
+	            var window_1 = windows[i];
+	            if (!window_1.closed) {
+	                window_1.next(value);
+	                if (window_1.numberOfNextedValues >= this.maxWindowSize) {
+	                    this.closeWindow(window_1);
+	                }
 	            }
 	        }
 	    };
@@ -38942,15 +39783,15 @@
 	    WindowTimeSubscriber.prototype._complete = function () {
 	        var windows = this.windows;
 	        while (windows.length > 0) {
-	            var window_4 = windows.shift();
-	            if (!window_4.closed) {
-	                window_4.complete();
+	            var window_2 = windows.shift();
+	            if (!window_2.closed) {
+	                window_2.complete();
 	            }
 	        }
 	        this.destination.complete();
 	    };
 	    WindowTimeSubscriber.prototype.openWindow = function () {
-	        var window = new Subject_1.Subject();
+	        var window = new CountedSubject();
 	        this.windows.push(window);
 	        var destination = this.destination;
 	        destination.next(window);
@@ -38966,7 +39807,7 @@
 	function dispatchWindowTimeSpanOnly(state) {
 	    var subscriber = state.subscriber, windowTimeSpan = state.windowTimeSpan, window = state.window;
 	    if (window) {
-	        window.complete();
+	        subscriber.closeWindow(window);
 	    }
 	    state.window = subscriber.openWindow();
 	    this.schedule(state, windowTimeSpan);
@@ -38981,8 +39822,8 @@
 	    action.add(context.subscription);
 	    action.schedule(state, windowCreationInterval);
 	}
-	function dispatchWindowClose(arg) {
-	    var subscriber = arg.subscriber, window = arg.window, context = arg.context;
+	function dispatchWindowClose(state) {
+	    var subscriber = state.subscriber, window = state.window, context = state.context;
 	    if (context && context.action && context.subscription) {
 	        context.action.remove(context.subscription);
 	    }
@@ -38991,17 +39832,17 @@
 	//# sourceMappingURL=windowTime.js.map
 
 /***/ },
-/* 501 */
+/* 502 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var windowToggle_1 = __webpack_require__(502);
+	var windowToggle_1 = __webpack_require__(503);
 	Observable_1.Observable.prototype.windowToggle = windowToggle_1.windowToggle;
 	//# sourceMappingURL=windowToggle.js.map
 
 /***/ },
-/* 502 */
+/* 503 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39186,17 +40027,17 @@
 	//# sourceMappingURL=windowToggle.js.map
 
 /***/ },
-/* 503 */
+/* 504 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var windowWhen_1 = __webpack_require__(504);
+	var windowWhen_1 = __webpack_require__(505);
 	Observable_1.Observable.prototype.windowWhen = windowWhen_1.windowWhen;
 	//# sourceMappingURL=windowWhen.js.map
 
 /***/ },
-/* 504 */
+/* 505 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39328,17 +40169,17 @@
 	//# sourceMappingURL=windowWhen.js.map
 
 /***/ },
-/* 505 */
+/* 506 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var withLatestFrom_1 = __webpack_require__(506);
+	var withLatestFrom_1 = __webpack_require__(507);
 	Observable_1.Observable.prototype.withLatestFrom = withLatestFrom_1.withLatestFrom;
 	//# sourceMappingURL=withLatestFrom.js.map
 
 /***/ },
-/* 506 */
+/* 507 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39349,7 +40190,7 @@
 	};
 	var OuterSubscriber_1 = __webpack_require__(211);
 	var subscribeToResult_1 = __webpack_require__(212);
-	/* tslint:disable:max-line-length */
+	/* tslint:enable:max-line-length */
 	/**
 	 * Combines the source Observable with other Observables to create an Observable
 	 * whose values are calculated from the latest values of each, only when the
@@ -39375,7 +40216,7 @@
 	 *
 	 * @see {@link combineLatest}
 	 *
-	 * @param {Observable} other An input Observable to combine with the source
+	 * @param {ObservableInput} other An input Observable to combine with the source
 	 * Observable. More than one input Observables may be given as argument.
 	 * @param {Function} [project] Projection function for combining values
 	 * together. Receives all values in order of the Observables passed, where the
@@ -39473,31 +40314,31 @@
 	//# sourceMappingURL=withLatestFrom.js.map
 
 /***/ },
-/* 507 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var Observable_1 = __webpack_require__(181);
-	var zip_1 = __webpack_require__(289);
-	Observable_1.Observable.prototype.zip = zip_1.zipProto;
-	//# sourceMappingURL=zip.js.map
-
-/***/ },
 /* 508 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
 	var Observable_1 = __webpack_require__(181);
-	var zipAll_1 = __webpack_require__(509);
-	Observable_1.Observable.prototype.zipAll = zipAll_1.zipAll;
-	//# sourceMappingURL=zipAll.js.map
+	var zip_1 = __webpack_require__(290);
+	Observable_1.Observable.prototype.zip = zip_1.zipProto;
+	//# sourceMappingURL=zip.js.map
 
 /***/ },
 /* 509 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var zip_1 = __webpack_require__(289);
+	var Observable_1 = __webpack_require__(181);
+	var zipAll_1 = __webpack_require__(510);
+	Observable_1.Observable.prototype.zipAll = zipAll_1.zipAll;
+	//# sourceMappingURL=zipAll.js.map
+
+/***/ },
+/* 510 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var zip_1 = __webpack_require__(290);
 	/**
 	 * @param project
 	 * @return {Observable<R>|WebSocketSubject<T>|Observable<T>}
@@ -39511,7 +40352,7 @@
 	//# sourceMappingURL=zipAll.js.map
 
 /***/ },
-/* 510 */
+/* 511 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39521,11 +40362,11 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Observable_1 = __webpack_require__(181);
-	var Notification_1 = __webpack_require__(235);
-	var ColdObservable_1 = __webpack_require__(511);
-	var HotObservable_1 = __webpack_require__(515);
-	var SubscriptionLog_1 = __webpack_require__(513);
-	var VirtualTimeScheduler_1 = __webpack_require__(516);
+	var Notification_1 = __webpack_require__(236);
+	var ColdObservable_1 = __webpack_require__(512);
+	var HotObservable_1 = __webpack_require__(516);
+	var SubscriptionLog_1 = __webpack_require__(514);
+	var VirtualTimeScheduler_1 = __webpack_require__(517);
 	var defaultMaxFrame = 750;
 	var TestScheduler = (function (_super) {
 	    __extends(TestScheduler, _super);
@@ -39739,7 +40580,7 @@
 	//# sourceMappingURL=TestScheduler.js.map
 
 /***/ },
-/* 511 */
+/* 512 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39750,8 +40591,8 @@
 	};
 	var Observable_1 = __webpack_require__(181);
 	var Subscription_1 = __webpack_require__(186);
-	var SubscriptionLoggable_1 = __webpack_require__(512);
-	var applyMixins_1 = __webpack_require__(514);
+	var SubscriptionLoggable_1 = __webpack_require__(513);
+	var applyMixins_1 = __webpack_require__(515);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -39790,11 +40631,11 @@
 	//# sourceMappingURL=ColdObservable.js.map
 
 /***/ },
-/* 512 */
+/* 513 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var SubscriptionLog_1 = __webpack_require__(513);
+	var SubscriptionLog_1 = __webpack_require__(514);
 	var SubscriptionLoggable = (function () {
 	    function SubscriptionLoggable() {
 	        this.subscriptions = [];
@@ -39814,7 +40655,7 @@
 	//# sourceMappingURL=SubscriptionLoggable.js.map
 
 /***/ },
-/* 513 */
+/* 514 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -39830,7 +40671,7 @@
 	//# sourceMappingURL=SubscriptionLog.js.map
 
 /***/ },
-/* 514 */
+/* 515 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -39848,7 +40689,7 @@
 	//# sourceMappingURL=applyMixins.js.map
 
 /***/ },
-/* 515 */
+/* 516 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39859,8 +40700,8 @@
 	};
 	var Subject_1 = __webpack_require__(180);
 	var Subscription_1 = __webpack_require__(186);
-	var SubscriptionLoggable_1 = __webpack_require__(512);
-	var applyMixins_1 = __webpack_require__(514);
+	var SubscriptionLoggable_1 = __webpack_require__(513);
+	var applyMixins_1 = __webpack_require__(515);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -39901,7 +40742,7 @@
 	//# sourceMappingURL=HotObservable.js.map
 
 /***/ },
-/* 516 */
+/* 517 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -39910,8 +40751,8 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var AsyncAction_1 = __webpack_require__(254);
-	var AsyncScheduler_1 = __webpack_require__(256);
+	var AsyncAction_1 = __webpack_require__(255);
+	var AsyncScheduler_1 = __webpack_require__(257);
 	var VirtualTimeScheduler = (function (_super) {
 	    __extends(VirtualTimeScheduler, _super);
 	    function VirtualTimeScheduler(SchedulerAction, maxFrames) {
@@ -39964,8 +40805,16 @@
 	    }
 	    VirtualAction.prototype.schedule = function (state, delay) {
 	        if (delay === void 0) { delay = 0; }
-	        return !this.id ?
-	            _super.prototype.schedule.call(this, state, delay) : this.add(new VirtualAction(this.scheduler, this.work)).schedule(state, delay);
+	        if (!this.id) {
+	            return _super.prototype.schedule.call(this, state, delay);
+	        }
+	        // If an action is rescheduled, we save allocations by mutating its state,
+	        // pushing it to the end of the scheduler queue, and recycling the action.
+	        // But since the VirtualTimeScheduler is used for testing, VirtualActions
+	        // must be immutable so they can be inspected later.
+	        var action = new VirtualAction(this.scheduler, this.work);
+	        this.add(action);
+	        return action.schedule(state, delay);
 	    };
 	    VirtualAction.prototype.requestAsyncId = function (scheduler, id, delay) {
 	        if (delay === void 0) { delay = 0; }
@@ -40004,17 +40853,47 @@
 	//# sourceMappingURL=VirtualTimeScheduler.js.map
 
 /***/ },
-/* 517 */
+/* 518 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var AnimationFrameAction_1 = __webpack_require__(518);
-	var AnimationFrameScheduler_1 = __webpack_require__(520);
+	var AnimationFrameAction_1 = __webpack_require__(519);
+	var AnimationFrameScheduler_1 = __webpack_require__(521);
+	/**
+	 *
+	 * Animation Frame Scheduler
+	 *
+	 * <span class="informal">Perform task when `window.requestAnimationFrame` would fire</span>
+	 *
+	 * When `animationFrame` scheduler is used with delay, it will fall back to {@link async} scheduler
+	 * behaviour.
+	 *
+	 * Without delay, `animationFrame` scheduler can be used to create smooth browser animations.
+	 * It makes sure scheduled task will happen just before next browser content repaint,
+	 * thus performing animations as efficiently as possible.
+	 *
+	 * @example <caption>Schedule div height animation</caption>
+	 * const div = document.querySelector('.some-div');
+	 *
+	 * Rx.Scheduler.schedule(function(height) {
+	 *   div.style.height = height + "px";
+	 *
+	 *   this.schedule(height + 1);  // `this` references currently executing Action,
+	 *                               // which we reschedule with new state
+	 * }, 0, 0);
+	 *
+	 * // You will see .some-div element growing in height
+	 *
+	 *
+	 * @static true
+	 * @name animationFrame
+	 * @owner Scheduler
+	 */
 	exports.animationFrame = new AnimationFrameScheduler_1.AnimationFrameScheduler(AnimationFrameAction_1.AnimationFrameAction);
 	//# sourceMappingURL=animationFrame.js.map
 
 /***/ },
-/* 518 */
+/* 519 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -40023,8 +40902,8 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var AsyncAction_1 = __webpack_require__(254);
-	var AnimationFrame_1 = __webpack_require__(519);
+	var AsyncAction_1 = __webpack_require__(255);
+	var AnimationFrame_1 = __webpack_require__(520);
 	/**
 	 * We need this JSDoc comment for affecting ESDoc.
 	 * @ignore
@@ -40074,7 +40953,7 @@
 	//# sourceMappingURL=AnimationFrameAction.js.map
 
 /***/ },
-/* 519 */
+/* 520 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -40113,7 +40992,7 @@
 	//# sourceMappingURL=AnimationFrame.js.map
 
 /***/ },
-/* 520 */
+/* 521 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -40122,7 +41001,7 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var AsyncScheduler_1 = __webpack_require__(256);
+	var AsyncScheduler_1 = __webpack_require__(257);
 	var AnimationFrameScheduler = (function (_super) {
 	    __extends(AnimationFrameScheduler, _super);
 	    function AnimationFrameScheduler() {
@@ -40155,7 +41034,7 @@
 	//# sourceMappingURL=AnimationFrameScheduler.js.map
 
 /***/ },
-/* 521 */
+/* 522 */
 /***/ function(module, exports) {
 
 	"use strict";
